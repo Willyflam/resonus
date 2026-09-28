@@ -48,18 +48,17 @@ jobs:
 
       - name: Prebuild (Android)
         run: pnpm expo prebuild --clean -p android
-      - name: Build debug APK
-        env:
-          EXPO_PUBLIC_COMMIT: ${{ github.sha }}
-        run: |
+      - name: Build release APK
+      env:
+         EXPO_PUBLIC_COMMIT: ${{ github.sha }}
+      run: |
           chmod +x android/gradlew
-          cd android && ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
-      - name: Name it after the commit
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "resonus-test-${GITHUB_SHA::7}.apk"
+          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+      run: cp android/app/build/outputs/apk/release/app-release.apk "resonus-test-${GITHUB_SHA::7}.apk"
       - name: Upload
-        uses: actions/upload-artifact@v7
-        with:
-          name: resonus-test-${{ github.sha }}
+      uses: actions/upload-artifact@v7
+         with:
+         name: resonus-test-${{ github.sha }}
           path: resonus-test-*.apk
           # Long enough to chase something over a few days, short enough not to
           # leave signed builds lying around for ever.
