@@ -56,11 +56,11 @@ export function useT(): TFunction {
  * languages like Russian (one/few/many).
  */
 const PLURALS: Record<string, Partial<Record<Language, string[]>>> = {
-  song: { es: ['canción', 'canciones'], en: ['song', 'songs'], de: ['Titel', 'Titel'], ca: ['cançó', 'cançons'], ru: ['композиция', 'композиции', 'композиций'], it: ['canzone', 'canzoni'], uk: ['пісня', 'пісні', 'пісень'], pl: ['utwór', 'utwory', 'utworów'], sv: ['låt', 'låtar'] },
-  album: { es: ['álbum', 'álbumes'], en: ['album', 'albums'], de: ['Album', 'Alben'], ca: ['àlbum', 'àlbums'], ru: ['альбом', 'альбома', 'альбомов'], it: ['album', 'album'], uk: ['альбом', 'альбоми', 'альбомів'], pl: ['album', 'albumy', 'albumów'], sv: ['album', 'album'] },
-  playlist: { es: ['lista', 'listas'], en: ['playlist', 'playlists'], de: ['Playlist', 'Playlists'], ca: ['llista', 'llistes'], ru: ['плейлист', 'плейлиста', 'плейлистов'], it: ['playlist', 'playlist'], uk: ['плейлист', 'плейлисти', 'плейлистів'], pl: ['playlista', 'playlisty', 'playlist'], sv: ['spellista', 'spellistor'] },
-  artist: { es: ['artista', 'artistas'], en: ['artist', 'artists'], ca: ['artista', 'artistes'], uk: ['виконавець', 'виконавці', 'виконавців'], pl: ['artysta', 'artyści', 'artystów'], sv: ['artist', 'artister'] },
-  episode: { es: ['episodio', 'episodios'], en: ['episode', 'episodes'], ca: ['episodi', 'episodis'], uk: ['епізод', 'епізоди', 'епізодів'], pl: ['odcinek', 'odcinki', 'odcinków'], sv: ['avsnitt', 'avsnitt'] },
+  song: { es: ['canción', 'canciones'], en: ['song', 'songs'], de: ['Titel', 'Titel'], ca: ['cançó', 'cançons'], ru: ['композиция', 'композиции', 'композиций'], it: ['canzone', 'canzoni'], uk: ['пісня', 'пісні', 'пісень'], pl: ['utwór', 'utwory', 'utworów'], sv: ['låt', 'låtar'], fr: ['morceau', 'morceaux']  },
+  album: { es: ['álbum', 'álbumes'], en: ['album', 'albums'], de: ['Album', 'Alben'], ca: ['àlbum', 'àlbums'], ru: ['альбом', 'альбома', 'альбомов'], it: ['album', 'album'], uk: ['альбом', 'альбоми', 'альбомів'], pl: ['album', 'albumy', 'albumów'], sv: ['album', 'album'], fr: ['album', 'albums'] },
+  playlist: { es: ['lista', 'listas'], en: ['playlist', 'playlists'], de: ['Playlist', 'Playlists'], ca: ['llista', 'llistes'], ru: ['плейлист', 'плейлиста', 'плейлистов'], it: ['playlist', 'playlist'], uk: ['плейлист', 'плейлисти', 'плейлистів'], pl: ['playlista', 'playlisty', 'playlist'], sv: ['spellista', 'spellistor'], fr: ['playlist', 'playlists'],  },
+  artist: { es: ['artista', 'artistas'], en: ['artist', 'artists'], ca: ['artista', 'artistes'], uk: ['виконавець', 'виконавці', 'виконавців'], pl: ['artysta', 'artyści', 'artystów'], sv: ['artist', 'artister'], fr: ['artiste', 'artistes'] },
+  episode: { es: ['episodio', 'episodios'], en: ['episode', 'episodes'], ca: ['episodi', 'episodis'], uk: ['епізод', 'епізоди', 'епізодів'], pl: ['odcinek', 'odcinki', 'odcinków'], sv: ['avsnitt', 'avsnitt'], fr: ['épisode', 'épisodes'] },
 };
 
 /**
