@@ -15,6 +15,7 @@ import { ensureAudioPermission, folderNameFromUri, pickFolder } from '@/lib/loca
 import { queryClient } from '@/lib/query';
 import { useAuthStore } from '@/store/auth';
 import { profileKeyOf, useLibraries } from '@/store/libraries';
+import { useSettings } from '@/store/settings';
 import { useToast } from '@/store/toast';
 import { colors, fontSize, radius, SHEET_MAX_WIDTH, spacing, themed, useTheme, tracking } from '@/theme';
 
@@ -29,6 +30,8 @@ export default function LibrarySettings() {
   const setSource = useAuthStore((s) => s.setOfflineSource);
   const setFolders = useAuthStore((s) => s.setOfflineFolders);
   const toast = useToast((s) => s.show);
+  const onlyMyPlaylists = useSettings((s) => s.onlyMyPlaylists);
+  const setOnlyMyPlaylists = useSettings((s) => s.setOnlyMyPlaylists);
   const insets = useSafeAreaInsets();
   // Server libraries (Navidrome multi-library): one switch per folder.
   const foldersMap = useLibraries((s) => s.folders);
@@ -208,6 +211,24 @@ export default function LibrarySettings() {
                 />
               </>
             ) : null}
+
+            <Text style={settingsStyles.sectionTitle}>{t('Playlists')}</Text>
+            <SwitchList
+              options={[
+                {
+                  label: t('Only my playlists'),
+                  description: t(
+                    'Hide the playlists other people on this server have made public.',
+                  ),
+                  value: onlyMyPlaylists,
+                  onChange: (v) => {
+                    setOnlyMyPlaylists(v);
+                    // Every screen reads the list from this one query.
+                    queryClient.invalidateQueries({ queryKey: ['playlists'] });
+                  },
+                },
+              ]}
+            />
           </>
         )}
 

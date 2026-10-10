@@ -761,5 +761,7 @@
   "Couldn't search for podcasts.": "Impossible de rechercher des podcasts.",
   "No podcast found for “{term}”. Try pasting the feed address below.": "Aucun podcast trouvé pour « {term} ». Essayez de coller l'adresse du flux ci-dessous.",
   "Search for a show, or paste the address of a feed below.": "Recherchez une émission ou collez l'adresse d'un flux ci-dessous.",
-  "Subscribe": "S'abonner"
+  "Subscribe": "S'abonner",
+  "Only my playlists": "Uniquement mes playlists",
+  "Hide the playlists other people on this server have made public.": "Masquez les playlists que d'autres personnes de ce serveur ont rendues publiques."
 }

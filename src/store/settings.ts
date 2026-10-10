@@ -1131,6 +1131,9 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   /** Your library with no chip pressed shows Favorites and the playlists, as
    *  it did before the mixed view, instead of everything (#217). */
   libraryShowsPlaylists: boolean;
+  /** Leave out the playlists other people on the server made public, so on a
+   *  server shared with someone else the lists are only the ones you own. */
+  onlyMyPlaylists: boolean;
   /** Chosen Library sort order (recent/added/alphabetical). */
   librarySort: LibrarySort;
   /** List or grid in the Library. */
@@ -1370,6 +1373,7 @@ const DEFAULTS = {
   homeButtons: DEFAULT_HOME_BUTTONS.map((b) => ({ ...b })),
   defaultTab: 'index' as DefaultTab,
   libraryShowsPlaylists: false,
+  onlyMyPlaylists: false,
   librarySort: 'recent' as LibrarySort,
   libraryLayout: 'list' as ListLayout,
   // Rows, like the songs below and like everything else in Explore. A grid is

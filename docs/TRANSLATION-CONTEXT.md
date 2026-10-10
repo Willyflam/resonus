@@ -5,7 +5,7 @@
      `src/i18n/context.jsonc`, and where a string shows up is read off the
      code, so both are fixed at the source and this page follows. -->
 
-Every string the app can show, under the screen it shows up on. 795 of them.
+Every string the app can show, under the screen it shows up on. 797 of them.
 The second column is only filled in where the English is ambiguous on its own
 If one tripped you up and the column is empty, that is worth telling us, and
 the answer goes into `src/i18n/context.jsonc` where the next translator of the
@@ -828,6 +828,7 @@ you are actually typing into, which is easier than reading it here.
 | `Couldn't start the scan` | Toast: the server refused to start a scan |
 | `Device` | In offline mode, where the phone's own music is read from: the whole device, as opposed to `Folder`, one folder you picked. Not a server library |
 | `Folder` | In offline mode, where the phone's own music is read from: one folder you picked, as opposed to `Device`, the whole phone |
+| `Hide the playlists other people on this server have made public.` |  |
 | `Keep at least one folder` | Refusing to remove the last folder of a local profile, which would leave it with no music |
 | `Keep at least one library on` | Toast: at least one of the server's libraries has to stay ticked |
 | `Libraries` | Section header over the server's libraries, when it has more than one |
@@ -835,6 +836,7 @@ you are actually typing into, which is easier than reading it here.
 | `Library updated` | Toast after the phone finished going through its own files |
 | `Local music` | Music stored on the phone itself |
 | `Music folders` | Settings > Local music: the list of phone folders the local profile reads its music from |
+| `Only my playlists` |  |
 | `Only the music in the folder you choose.` | The line under `Choose a folder (recommended)` |
 | `Rescan` | Trigger the server's library scan again |
 | `Rescanning your music…` | The phone is going through its own files again, offline |

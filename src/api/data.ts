@@ -19,6 +19,7 @@ import {
 } from '@/store/libraries';
 import { hashKey } from '@/lib/localLibrary';
 import { bump } from '@/lib/perfLog';
+import { isMine } from '@/lib/playlistOwner';
 import { queryClient } from '@/lib/query';
 import { getItem, setItem } from '@/lib/storage';
 import { useLastPlayed } from '@/store/lastPlayed';
@@ -954,24 +955,35 @@ export function getPlaylists(): Promise<Subsonic.Playlist[]> {
   // a profile switch while the request is in flight would otherwise measure the
   // new profile's recents against the old one's playlists and delete the lot.
   const asked = profileScopeId();
+  const me = auth().username;
   return Subsonic.getPlaylists(auth()).then((list) => {
-    useLibraryMirror.getState().savePlaylists(list);
     // These are all of them, so a playlist recorded as played and not in here
     // was deleted on the server. Its record outlived it and kept drawing a tile
     // on Home and a row in the car's Recents, both of which are drawn from what
     // was written down when it played rather than from any list: that is what
     // let it survive clearing the cache. Only on the way back from the server,
     // never from the mirror or the local files, which are not the whole story.
+    // Taken from the whole answer, before the setting below narrows it: leaving
+    // somebody else's playlist out of sight is not the server deleting it.
     if (profileScopeId() === asked) {
       useLastPlayed.getState().forgetMissing(
         'playlist',
         list.map((p) => p.id),
       );
     }
+    // The server hands over what you own plus whatever others made public. Cut
+    // here, at the one place every screen reads them from, so Home, Library,
+    // Search and the car all agree, and so that the offline copy and the
+    // background prefetch below don't spend storage and data on lists that are
+    // never shown.
+    const shown = useSettings.getState().onlyMyPlaylists
+      ? list.filter((p) => isMine(p, me))
+      : list;
+    useLibraryMirror.getState().savePlaylists(shown);
     // Cache each playlist's tracklist in the background so they are
     // available offline without opening them one by one (non-blocking).
-    void prefetchPlaylistDetails(list);
-    return list;
+    void prefetchPlaylistDetails(shown);
+    return shown;
   });
 }
 

@@ -54,6 +54,7 @@ import { useScreenBottomPadding } from '@/hooks/useScreenBottomPadding';
 import { columnsFor, useListPadding, useScreenSize } from '@/hooks/useScreenSize';
 import { listPerf } from '@/lib/listPerf';
 import { bump } from '@/lib/perfLog';
+import { isMine } from '@/lib/playlistOwner';
 import { haptic } from '@/lib/haptics';
 
 // Folders used to be a fourth segment here. It browses the server's own
@@ -99,11 +100,6 @@ const X_OVERSIZE = 2;
 type Owner = 'mine' | 'public';
 
 const OWNER_LABEL: Record<Owner, string> = { mine: 'Yours', public: 'Public' };
-
-/** Yours, both for the server that says so and for the one that says nothing. */
-function isMine(playlist: Playlist, username: string | undefined): boolean {
-  return !playlist.owner || playlist.owner === username;
-}
 
 function keeps(playlist: Playlist, owner: Owner, username: string | undefined): boolean {
   return owner === 'mine' ? isMine(playlist, username) : !!playlist.public;

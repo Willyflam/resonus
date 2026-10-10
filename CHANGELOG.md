@@ -9,6 +9,14 @@ Releases before 0.2.1 are only listed on the
 
 ## [Unreleased]
 
+### Added
+
+- An Only my playlists switch in Settings › Library, for a server you share with someone else: it leaves out the playlists other people have made public, on Home, Library, Search and in the car.
+
+### Fixed
+
+- The Yours chip in Playlists no longer goes missing when you signed in with your name in a different case than the server stores it.
+
 ## [0.8.2] - 2026-10-10
 
 ### Added
