@@ -17,7 +17,7 @@
  */
 import Icon from '@/components/Icon';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import ReorderableList, {
   useReorderableDrag,
@@ -82,7 +82,9 @@ function ArtistLine({ song }: { song: Song }) {
  * three drag and remove the same way (#157); the state only decides how the row
  * reads and what a tap does.
  */
-function QueueRow({
+// Memoised: the cursor moving re-renders the list, and with a long queue
+// that was every mounted row rather than the two whose state changed.
+const QueueRow = memo(function QueueRow({
   item,
   absIndex,
   state,
@@ -97,6 +99,8 @@ function QueueRow({
   const toast = useToast((s) => s.show);
   const t = useT();
   const drag = useReorderableDrag();
+  // Memoised, so it has to ask for a repaint on a theme change itself.
+  useTheme();
   const current = state === 'current';
 
   const remove = async () => {
@@ -137,7 +141,7 @@ function QueueRow({
       </View>
     </View>
   );
-}
+});
 
 export default function QueueScreen() {
   useSettings((s) => s.appFont); // re-render when font changes
@@ -367,6 +371,20 @@ export default function QueueScreen() {
             icon="list-outline"
             title={t('The queue is empty.')}
             subtitle={t('Play a song or album to start the queue.')}
+            // Empty is exactly when the queue left on another player is worth
+            // bringing over, and the ⋯ menu that offers it only shows with a
+            // queue (#248 made this screen reachable without one).
+            action={
+              hasServerQueue
+                ? {
+                    label: t("Get the server's queue"),
+                    onPress: () =>
+                      void restoreFromServer(true).then((found) => {
+                        if (!found) toast(t('The server has no saved queue'));
+                      }),
+                  }
+                : undefined
+            }
           />
         </View>
       )}

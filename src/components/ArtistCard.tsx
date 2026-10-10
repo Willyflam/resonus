@@ -4,10 +4,12 @@
  * previously drawn by hand on each screen.
  */
 import { Link } from 'expo-router';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { COVER, coverArtUrl, type Artist } from '@/api/data';
-import { fontSize, spacing, themed } from '@/theme';
+import { fontSize, lineHeight, spacing, themed, useTheme } from '@/theme';
+import { bump } from '@/lib/perfLog';
 import { Cover } from './Cover';
 
 interface Props {
@@ -15,7 +17,10 @@ interface Props {
   width?: number;
 }
 
-export function ArtistCard({ artist, width = 150 }: Props) {
+export const ArtistCard = memo(function ArtistCard({ artist, width = 150 }: Props) {
+  bump('render · ArtistCard');
+  // Memoised, so it has to ask for a repaint on a theme change itself.
+  useTheme();
   const cover = coverArtUrl(artist.coverArt ?? artist.id, COVER.card);
 
   return (
@@ -30,13 +35,14 @@ export function ArtistCard({ artist, width = 150 }: Props) {
       </Pressable>
     </Link>
   );
-}
+});
 
 const styles = themed((colors) => ({
   container: { gap: spacing.xs, alignItems: 'center' },
   name: {
     color: colors.text,
     fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
     fontWeight: '500',
     marginTop: spacing.xs,
     textAlign: 'center',

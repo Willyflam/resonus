@@ -9,6 +9,124 @@ Releases before 0.2.1 are only listed on the
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-10
+
+### Added
+
+- Artist radios on Home, built from your most played artists, with new ones each time Home is pulled to refresh (#252).
+- A radio's ⋯ menu, also on a long press of its card, to queue it, save it as a playlist, refresh it or go to its artist.
+- Any artist's radio from the artist's ⋯ menu or a song's menu, and a radio keeps playing once its songs run out.
+- Radio settings in Appearance: turn them off entirely, choose how many Home shows and whether they keep playing.
+- The navigation bar can be solid, blurred or a gradient, from one setting (#252).
+- iOS: a home screen widget with the current track and a play/pause button (#252).
+- iOS: a Precise timing switch and a frame rate choice for animated lock screen covers (#252).
+- Turkish, thanks to @sectns (#250).
+- A lyrics weight setting, from light to bold (#244).
+- Android: an option to blur the lyrics lines that are not playing (#244).
+
+### Changed
+
+- Word-timed lyrics sweep across each word as it is sung, with a small bounce (#244).
+- The lyrics size also applies to the lyrics card and the lyrics on the cover (#244).
+- Lyrics fade out softly under the header over a blurred cover (#244).
+
+### Fixed
+
+- A track that fails in the background retries instead of stopping, and resumes when the network comes back (#254).
+- Lyrics open right away, with a spinner while they load (#255).
+- iOS: opening an artist or album from the player no longer lands it in a sheet (#252).
+- iOS: the Dynamic Island shows tall covers square (#252).
+- iOS: opening the app no longer stops what another app is playing (#252).
+- Albums and playlists fade their colour in instead of flashing grey first.
+- Screens no longer wait behind slow similar-song, top-song and artist-info requests, or behind the Android Auto library filling in.
+- A shelf with a title in Japanese, Chinese or with an emoji is no longer taller than the rest.
+- Home scrolls smoothly again with the Most played songs and Random songs shelves on.
+- Those song shelves show pages side by side on a wide or turned screen instead of stretching one.
+- Genres scroll smoothly once their covers have loaded.
+
+## [0.8.1] - 2026-10-04
+
+### Added
+
+- The player's ⋯ menu always opens the queue, and devices and speed when their buttons are hidden (#248).
+- An optional Queue button at the top of Home, off by default.
+- An empty queue offers to bring over the server's saved queue.
+
+### Fixed
+
+- Local M4A and FLAC files show their titles, artists, albums and covers (#249).
+- Casting to a TV moves on to the next song on time with the screen off (#246).
+- On phones that freeze apps in the background, the player no longer shows the old song for seconds on return (#192).
+- Offline, a song whose cover is not downloaded no longer breaks the lock screen and the car.
+- Playlists open without waiting behind the suggested tracks of the last one, on servers slow to find similar songs.
+
+## [0.7.14] - 2026-10-03
+
+### Added
+
+- The update prompt sums up what the new version brings.
+
+### Changed
+
+- The player shows only the Devices and Queue buttons by default.
+
+### Fixed
+
+- Starting an album no longer refetches the whole Android Auto library.
+- The diagnostics report no longer counts frames while the app is in the background.
+- Home redraws its album cards less often.
+- Genre cards load their covers with one request each, even with several libraries.
+- Long queues redraw fewer rows when the song changes.
+- With several libraries on Navidrome, album lists load in one request instead of one per library.
+- Lyrics redraw only when the line or the word changes.
+
+## [0.7.13] - 2026-10-02
+
+### Added
+
+- Settings > About > Share diagnostic report, for bug reports.
+- The diagnostics report counts late frames per screen and row redraws.
+- Remixers show up as artists, with their remixes under Appears on (#215).
+
+### Changed
+
+- Settings drop descriptions that only repeated the option.
+- Settings > Appearance shows the chosen theme mode.
+- The app always reopens where you left it; the Keep where you were switch is gone (#225).
+
+### Fixed
+
+- Fragmented M4As no longer stop after two seconds (#242).
+- Offline, songs not on the phone are greyed out again.
+- Offline changes no longer go to another profile's account.
+- Offline listens are no longer scrobbled twice.
+- One profile's albums and playlists no longer leak into another's offline library.
+- Skipping while casting no longer leaves the speaker on the previous song.
+- Casting retries a track the TV refuses while another is playing (#246).
+
+## [0.7.12] - 2026-10-01
+
+### Added
+
+- Brazilian Portuguese, thanks to @vicsantus (#240).
+- Settings > Home chips has a switch on top that turns every chip on or off at once.
+- Settings > About can export your settings to a file and import them on another phone or someone else's, without accounts or passwords (#243).
+
+### Changed
+
+- The chips and the quick grid on Home start turned off on a new install; existing setups keep theirs.
+- The greeting and buttons at the top of Home scroll away with the rest instead of staying pinned.
+- The buttons under the player controls are spread across the width by default on a new install.
+- The Ukrainian translation is complete again, thanks to @albedych (#245).
+
+### Fixed
+
+- Opening Search no longer makes the page jump down a moment after it appears.
+- A cover opened full screen is now shown with square corners, whatever the cover corners setting (#241).
+- Dragging the seek bar in a fragmented M4A, such as the ones many downloaders save from streaming services, no longer starts the song over (#242).
+- Home no longer offers the song paused on this same phone as playing on Resonus.
+- "Don't remind me" on the battery optimization warning now keeps it from coming back on the next launch (#238).
+
 ## [0.7.11] - 2026-09-27
 
 ### Added

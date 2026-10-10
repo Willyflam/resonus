@@ -13,7 +13,8 @@ import { Pressable, Text, View } from 'react-native';
 import { COVER, songCoverUrl, type Song } from '@/api/data';
 import { useAuthStore } from '@/store/auth';
 import { useDownloads } from '@/store/downloads';
-import { colors, fontSize, radius, spacing, themed, useTheme } from '@/theme';
+import { colors, fontSize, lineHeight, radius, spacing, themed, useTheme } from '@/theme';
+import { bump } from '@/lib/perfLog';
 import { Cover, useCoverRadius } from './Cover';
 import { ExplicitBadge, useExplicitBadge } from './ExplicitBadge';
 
@@ -41,6 +42,7 @@ export const SongCard = memo(function SongCard({
   onPressIn,
   onLongPress,
 }: Props) {
+  bump('render · SongCard');
   // Worked out here rather than read off the song: see the same note in
   // `TrackRow`. A list the server answered before the connection went away
   // carries no mark, and would show as if it were on the phone.
@@ -99,13 +101,14 @@ const styles = themed((colors) => ({
   title: {
     color: colors.text,
     fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
     fontWeight: '500',
     marginTop: spacing.xs,
   },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   // `flexShrink` so a long name gives way to the badge instead of pushing it
   // off the card.
-  artist: { color: colors.textSecondary, fontSize: fontSize.xs, flexShrink: 1 },
+  artist: { color: colors.textSecondary, fontSize: fontSize.xs, lineHeight: lineHeight.xs, flexShrink: 1 },
   check: {
     position: 'absolute',
     top: spacing.sm,

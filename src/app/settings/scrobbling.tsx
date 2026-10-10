@@ -5,7 +5,9 @@
  * listen mean the same on a two-minute track and on a ten-minute one, and a
  * flat time, which is what keeps the long ones from asking for five minutes
  * before they count. Either can be off, and the earlier one is what fires. What
- * they add up to lives in `scrobbleThresholdSec` (#126).
+ * they add up to lives in `scrobbleThresholdSec` (#126). The report goes to
+ * this server, which passes it on to Last.fm or ListenBrainz when it is set
+ * up for that - the radios on Home read the play counts that come back.
  */
 import { ScrollView, Text } from 'react-native';
 

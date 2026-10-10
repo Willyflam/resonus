@@ -1,9 +1,16 @@
 /** Settings › Player: looks and extras for the playback screen. */
 import { useRouter } from 'expo-router';
-import { ScrollView, Text } from 'react-native';
+import { Platform, ScrollView, Text } from 'react-native';
 
 import { canBlurBars } from '@/components/BarBlur';
-import { SelectList, SettingRow, SettingsGroup, SettingsPage, settingsStyles, SwitchList } from '@/components/SettingsUI';
+import {
+  SelectList,
+  SettingRow,
+  SettingsGroup,
+  SettingsPage,
+  settingsStyles,
+  SwitchList,
+} from '@/components/SettingsUI';
 import { useLocalProfile } from '@/hooks/useLocalProfile';
 import { useT } from '@/i18n';
 import { useAuthStore } from '@/store/auth';
@@ -14,6 +21,7 @@ import {
   type CoverTapAction,
   type LyricsAlign,
   type LyricsSize,
+  type LyricsWeight,
   type MiniPlayerButtons,
   type LyricsSource,
   type ScreenBackground,
@@ -67,6 +75,8 @@ export default function PlayerSettings() {
   const setFitCoverArt = useSettings((s) => s.setFitCoverArt);
   const animatedCoverBackground = useSettings((s) => s.animatedCoverBackground);
   const setAnimatedCoverBackground = useSettings((s) => s.setAnimatedCoverBackground);
+  const animatedArtworkFps = useSettings((s) => s.animatedArtworkFps);
+  const setAnimatedArtworkFps = useSettings((s) => s.setAnimatedArtworkFps);
   const miniPlayerColorBackground = useSettings((s) => s.miniPlayerColorBackground);
   const blurMiniPlayer = useSettings((s) => s.blurMiniPlayer);
   const miniPlayerProgress = useSettings((s) => s.miniPlayerProgress);
@@ -75,8 +85,12 @@ export default function PlayerSettings() {
   const setMiniPlayerButtons = useSettings((s) => s.setMiniPlayerButtons);
   const lyricsSize = useSettings((s) => s.lyricsSize);
   const setLyricsSize = useSettings((s) => s.setLyricsSize);
+  const lyricsWeight = useSettings((s) => s.lyricsWeight);
+  const setLyricsWeight = useSettings((s) => s.setLyricsWeight);
   const lyricsAlign = useSettings((s) => s.lyricsAlign);
   const setLyricsAlign = useSettings((s) => s.setLyricsAlign);
+  const blurInactiveLyrics = useSettings((s) => s.blurInactiveLyrics);
+  const setBlurInactiveLyrics = useSettings((s) => s.setBlurInactiveLyrics);
   const setBlurMiniPlayer = useSettings((s) => s.setBlurMiniPlayer);
   const setMiniPlayerColorBackground = useSettings((s) => s.setMiniPlayerColorBackground);
   const lyricsBackground = useSettings((s) => s.lyricsBackground);
@@ -163,7 +177,6 @@ export default function PlayerSettings() {
             options={[
               {
                 label: t('Fit cover art'),
-                description: t('Show the whole artwork instead of cropping it to a square.'),
                 value: fitCoverArt,
                 onChange: setFitCoverArt,
               },
@@ -186,6 +199,18 @@ export default function PlayerSettings() {
             value={coverDoubleTapAction}
             onChange={setCoverDoubleTapAction}
           />
+          {/* The lock screen clip is an iOS thing; Android has none to encode. */}
+          {Platform.OS === 'ios' ? (
+            <SelectList<number>
+              label={t('Animated cover frame rate')}
+              options={[
+                { value: 30, label: t('30 fps') },
+                { value: 60, label: t('60 fps') },
+              ]}
+              value={animatedArtworkFps}
+              onChange={setAnimatedArtworkFps}
+            />
+          ) : null}
         </SettingsGroup>
 
         <Text style={settingsStyles.sectionTitle}>{t('Elements')}</Text>
@@ -315,6 +340,18 @@ export default function PlayerSettings() {
             value={lyricsSize}
             onChange={setLyricsSize}
           />
+          <SelectList<LyricsWeight>
+            label={t('Lyrics weight')}
+            options={[
+              { value: '300', label: t('Light font weight') },
+              { value: '400', label: t('Regular font weight') },
+              { value: '500', label: t('Medium font weight') },
+              { value: '600', label: t('Semi-bold font weight') },
+              { value: '700', label: t('Bold font weight') },
+            ]}
+            value={lyricsWeight}
+            onChange={setLyricsWeight}
+          />
           <SelectList<LyricsAlign>
             label={t('Lyrics alignment')}
             options={[
@@ -326,6 +363,18 @@ export default function PlayerSettings() {
           />
           <SwitchList
             options={[
+              ...(Platform.OS === 'android'
+                ? [
+                    {
+                      label: t('Blur inactive lyrics'),
+                      description: t(
+                        'Slightly blur synchronized lyrics other than the current line to emphasize what is playing.',
+                      ),
+                      value: blurInactiveLyrics,
+                      onChange: setBlurInactiveLyrics,
+                    },
+                  ]
+                : []),
               {
                 label: t('Show lyrics card'),
                 value: showLyricsCard,

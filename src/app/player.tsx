@@ -8,6 +8,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -55,6 +56,7 @@ import { applyStarChange, resyncFavorites } from '@/lib/favoritesCache';
 import { haptic } from '@/lib/haptics';
 import { localHttpAvailable } from '@/lib/localHttp';
 import { pushOnce } from '@/lib/pushOnce';
+import { pushOrReplace } from '@/lib/pushOrReplace';
 import { getItem, setItem } from '@/lib/storage';
 import { useArtistPicker } from '@/store/artistPicker';
 import { useAuthStore } from '@/store/auth';
@@ -183,8 +185,30 @@ function SleepButton({ onPress, color }: { onPress: () => void; color: string })
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     if (!endsAt) return;
-    const id = setInterval(tick, 15_000);
-    return () => clearInterval(id);
+    // The tick only repaints the minutes left: nothing to repaint in background
+    // (timers keep running there on iOS), so it runs in the foreground only,
+    // repainting at once on return to catch up.
+    let id: ReturnType<typeof setInterval> | null = null;
+    const disarm = () => {
+      if (id) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const arm = () => {
+      if (AppState.currentState === 'active' && !id) id = setInterval(tick, 15_000);
+    };
+    arm();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') {
+        tick();
+        arm();
+      } else disarm();
+    });
+    return () => {
+      disarm();
+      sub.remove();
+    };
   }, [endsAt]);
   const on = !!endsAt || atSongEnd;
   return (
@@ -397,7 +421,9 @@ export default function PlayerScreen() {
   const bgStyle = useAnimatedStyle(() => ({ backgroundColor: bgColor.value }));
   // Same query used by the lyrics card (cached): here only to know if there
   // are lyrics and let the card peek below the first page.
-  const { data: lyrics } = useLyrics(canLyrics ? (song ?? undefined) : undefined);
+  const { data: lyrics, isLoading: lyricsLoading } = useLyrics(
+    canLyrics ? (song ?? undefined) : undefined,
+  );
   // The only reason this screen scrolls at all: the room left under the first
   // page and the card itself both read this, and they must stay in step or the
   // player can be dragged for no reason (#107). What does NOT read it is the
@@ -692,10 +718,10 @@ export default function PlayerScreen() {
         offset.value = withSpring(target, { damping: 20, stiffness: 200 });
       }
     });
-  // Cover tap shows lyrics (if any). Coexists with swipe: tap only wins if
-  // there was no drag. `hasLyrics` is a boolean so it can be read from the
-  // gesture's UI thread.
-  const hasLyrics = !!lyrics;
+  // Opens while the query is still out; once it answers with nothing, the
+  // tap stays put rather than opening an empty screen. Coexists with swipe:
+  // tap only wins if there was no drag.
+  const canOpenLyrics = !!song && canLyrics && (lyricsLoading || !!lyrics);
   // What tap does based on setting: «inline» shows lyrics in place of the
   // cover (toggle), «screen» opens the full screen, «none» nothing.
   const [inlineLyrics, setInlineLyrics] = useState(false);
@@ -730,9 +756,8 @@ export default function PlayerScreen() {
    * Every action the cover offers, wherever it was asked for.
    *
    * One tap and two share the list, so this is the one place that knows how to
-   * run any of them. The two lyrics actions are the only ones that can find
-   * nothing to do: a song with no lyrics leaves the tap where it was rather
-   * than opening an empty screen.
+   * run any of them. Lyrics open immediately and show their loading or empty
+   * state until the query returns.
    *
    * Handed to `scheduleOnRN` by name, with the action as its argument: a
    * gesture's `onEnd` is a worklet, and a function written inside one is not
@@ -741,10 +766,10 @@ export default function PlayerScreen() {
   const runCoverAction = (action: CoverTapAction) => {
     switch (action) {
       case 'inline':
-        if (hasLyrics) setInlineLyrics((v) => !v);
+        if (canOpenLyrics) setInlineLyrics((v) => !v);
         break;
       case 'screen':
-        if (hasLyrics) pushOnce('/lyrics');
+        if (canOpenLyrics) pushOnce('/lyrics');
         break;
       case 'playPause':
         toggle();
@@ -753,7 +778,12 @@ export default function PlayerScreen() {
         void toggleFavorite();
         break;
       case 'album':
-        if (song?.albumId) pushOnce(`/album/${song.albumId}`);
+        // On iOS the player modal is replaced (a push out of it would land the
+        // album in a sheet); elsewhere it is the guarded push it always was.
+        if (song?.albumId) {
+          if (Platform.OS === 'ios') pushOrReplace(`/album/${song.albumId}`, 'player');
+          else pushOnce(`/album/${song.albumId}`);
+        }
         break;
       default:
         break;
@@ -926,6 +956,16 @@ export default function PlayerScreen() {
    * file behind a URL, not a station (`vod`).
    */
   const canSpeed = (!song.url || song.vod) && !remoteDevice;
+  // The ⋯ menu always leads to the queue, and to devices and speed when their
+  // buttons are hidden (#248): the devices button also shows while casting,
+  // and the speed button while not at 1×, and then it is there.
+  const buttonOn = (key: string) => playerButtons.some((b) => b.key === key && b.enabled);
+  const menuOptions = () => ({
+    showLyrics: canOpenLyrics,
+    queue: true,
+    devices: !buttonOn('devices') && canDevices && !remoteDevice ? () => setOutputOpen(true) : undefined,
+    speed: !buttonOn('speed') && canSpeed && speed === 1 ? () => openSpeedSheet.current() : undefined,
+  });
 
   return (
     <GestureDetector gesture={dismissPan}>
@@ -1095,7 +1135,7 @@ export default function PlayerScreen() {
               <FavoriteButton id={song.id} starred={favorited} size={24} />
             </View>
           ) : (
-            <CircleButton name="ellipsis-horizontal" label={t('More options')} onPress={() => openMenu(song, undefined, { showLyrics: hasLyrics })} />
+            <CircleButton name="ellipsis-horizontal" label={t('More options')} onPress={() => openMenu(song, undefined, menuOptions())} />
           )}
         </View>
 
@@ -1159,7 +1199,7 @@ export default function PlayerScreen() {
             </Animated.View>
           </GestureDetector>
           {/* Lyrics in place of the cover (setting): same frame, on top. */}
-          {inlineLyrics && hasLyrics ? (
+          {inlineLyrics && canLyrics ? (
             <View style={[styles.lyricsOverlay, { height: coverSize }]}>
               <CoverLyrics size={coverSize} onClose={() => setInlineLyrics(false)} />
             </View>
@@ -1220,7 +1260,7 @@ export default function PlayerScreen() {
                 <Pressable
                   style={styles.tapText}
                   hitSlop={6}
-                  onPress={() => router.push(`/album/${song.albumId}` as never)}
+                  onPress={() => pushOrReplace(`/album/${song.albumId}`, 'player')}
                 >
                   <MarqueeText text={title} style={styles.title} enabled={marqueeTitles} />
                 </Pressable>
@@ -1235,9 +1275,9 @@ export default function PlayerScreen() {
                     : () =>
                         targets.length > 1
                           ? openArtistPicker(targets)
-                          : router.push(`/artist/${targets[0].id}`);
+                          : pushOrReplace(`/artist/${targets[0].id}`, 'player');
                 const goAlbum = song.albumId
-                  ? () => router.push(`/album/${song.albumId}` as never)
+                  ? () => pushOrReplace(`/album/${song.albumId}`, 'player')
                   : undefined;
                 return (
                   <>
@@ -1293,7 +1333,7 @@ export default function PlayerScreen() {
               <CircleButton
                 name="ellipsis-horizontal"
                 label={t('More options')}
-                onPress={() => openMenu(song, undefined, { showLyrics: hasLyrics })}
+                onPress={() => openMenu(song, undefined, menuOptions())}
               />
             ) : (
               <FavoriteButton id={song.id} starred={favorited} size={26} />
@@ -1371,6 +1411,12 @@ export default function PlayerScreen() {
                   });
               }}
             >
+              {/* Phosphor's play triangle is not centred in its own box: it is
+                  drawn from 256 to 960 of a 1024-unit em, so the tip almost
+                  touches the right edge while the base sits a quarter of the
+                  way in. Centred as it comes, the icon still reads as pushed
+                  right, so the box itself moves left - padding on the right,
+                  the only side with room to take it. */}
               {isBuffering ? (
                 <ActivityIndicator size="small" color={playInk} />
               ) : (
@@ -1378,6 +1424,7 @@ export default function PlayerScreen() {
                   name={isPlaying ? 'pause' : 'play'}
                   size={34}
                   color={playInk}
+                  style={!isPlaying && { paddingRight: 4.5 }}
                 />
               )}
             </Pressable>
@@ -1473,9 +1520,9 @@ export default function PlayerScreen() {
                       hitSlop={10}
                       accessibilityRole="button"
                       accessibilityLabel={t('Lyrics')}
-                      disabled={!hasLyrics}
+                      disabled={!canOpenLyrics}
                       onPress={() => pushOnce('/lyrics')}
-                      style={[styles.bottomButton, !hasLyrics && styles.bottomButtonOff]}
+                      style={[styles.bottomButton, !canOpenLyrics && styles.bottomButtonOff]}
                     >
                       <Icon name="mic-outline" size={26} color={ink} />
                     </Pressable>
@@ -1508,7 +1555,7 @@ export default function PlayerScreen() {
                     <SleepButton
                       key={key}
                       color={ink}
-                      onPress={() => openMenu(song, undefined, { showLyrics: hasLyrics, sleep: true })}
+                      onPress={() => openMenu(song, undefined, { ...menuOptions(), sleep: true })}
                     />
                   ) : null;
                 case 'queue':

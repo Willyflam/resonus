@@ -64,7 +64,12 @@ export interface Palette {
   textSecondary: string;
   /** Muted text: descriptions, disabled icons, placeholders. */
   textMuted: string;
-  /** The times under the progress bar: lighter than the greys, short of white. */
+  /**
+   * The two times under the progress bar, on the player and on the lyrics
+   * screen. A step from the greys towards white and short of it: over artwork
+   * the muted greys sit too far back to be read at a glance, and full white
+   * glares out of the screen beside the cover.
+   */
   textTime: string;
   /** The accent, for fills (play button, active dot, switch track). */
   accent: string;
@@ -858,6 +863,17 @@ export const fontSize = {
   lg: 20,
   xl: 24,
   xxl: 32,
+} as const;
+
+/**
+ * Fixed line heights for one-line text set side by side, at what Roboto gives
+ * the Latin alphabet on its own. A title in Japanese or with an emoji falls
+ * back to a font with a taller line, so one such card in a shelf made the whole
+ * shelf taller than the next, and the page below it shifted.
+ */
+export const lineHeight = {
+  xs: 16,
+  sm: 16.5,
 } as const;
 
 /**

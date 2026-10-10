@@ -2,7 +2,7 @@
   "expo": {
     "name": "Resonus",
     "slug": "resonus",
-    "version": "0.7.11",
+    "version": "0.8.2",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "resonus",
@@ -13,13 +13,17 @@
       "icon": "./assets/images/resonus-ios.icon",
       "infoPlist": {
         "UIBackgroundModes": [
-          "audio"
+          "audio",
+          "fetch"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.juananzzz.resonus.pendingPressRefresh"
         ]
       }
     },
     "android": {
       "package": "com.juananzzz.resonus",
-      "versionCode": 53,
+      "versionCode": 59,
       "adaptiveIcon": {
         "backgroundColor": "#1CD667",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,6 +45,7 @@
       "./plugins/withoutFontWeightAdjustment",
       "./plugins/withTrimmedPermissions",
       "./plugins/withAppLocales",
+      "./plugins/withResonusWidget",
       "expo-router",
       [
         "expo-splash-screen",

@@ -1,7 +1,7 @@
 /** Bottom sheet with actions for a song (⋯ menu). */
 import Icon from '@/components/Icon';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -38,11 +38,13 @@ import { useCanShare } from '@/hooks/useCanShare';
 import { useFavoriteIds } from '@/hooks/useFavoriteIds';
 import { applyStarChange, resyncFavorites } from '@/lib/favoritesCache';
 import { artistTargets } from '@/lib/artistNav';
+import { pushOrReplace } from '@/lib/pushOrReplace';
 import { exportToFolder, shareSongFile } from '@/lib/exportSong';
 import { useSharePicker } from '@/store/sharePicker';
 import { normKey, pickFolder } from '@/lib/localLibrary';
 import { useArtistPicker } from '@/store/artistPicker';
 import { useAuthStore } from '@/store/auth';
+import { useSettings } from '@/store/settings';
 import { useAutoDownloads } from '@/store/autoDownloads';
 import { useDownloads } from '@/store/downloads';
 import { usePlayerStore } from '@/store/player';
@@ -121,13 +123,18 @@ export function SongMenuSheet() {
   const insets = useSafeAreaInsets();
   const { height: screenH } = useScreenSize();
   const router = useRouter();
+  // Read here, before the early return below: what is on top decides whether
+  // detail screens push or replace the modal (see `goDetail`).
+  const top = useSegments()[0];
   const auth = useAuthStore((s) => s.auth);
   const offline = useAuthStore((s) => s.offline);
+  const radiosEnabled = useSettings((s) => s.radiosEnabled);
   const queryClient = useQueryClient();
   const song = useSongMenu((s) => s.song);
   const context = useSongMenu((s) => s.context);
   const showLyrics = useSongMenu((s) => s.showLyrics);
   const startInSleep = useSongMenu((s) => s.sleep);
+  const extras = useSongMenu((s) => s.extras);
   const closeNow = useSongMenu((s) => s.close);
   const { dismiss, pan, makePan, backdropStyle, sheetStyle, onSheetLayout } = useBottomSheetAnim(
     !!song,
@@ -203,6 +210,15 @@ export function SongMenuSheet() {
     dismiss(() => {
       closeNow();
       router.push(path);
+    });
+
+  // Detail screens (album, artist) go through here instead of `go`: opened
+  // with the player on top, a push would land them in a sheet on iOS, so the
+  // modal is replaced there (see `pushOrReplace`).
+  const goDetail = (path: string) =>
+    dismiss(() => {
+      closeNow();
+      pushOrReplace(path, top);
     });
 
   /**
@@ -571,10 +587,10 @@ export function SongMenuSheet() {
                       icon="disc-outline"
                       label={t('Go to album')}
                       onPress={() => {
-                        if (song.albumId) { go(`/album/${song.albumId}`); return; }
+                        if (song.albumId) { goDetail(`/album/${song.albumId}`); return; }
                         if (song.album) {
                           const key = normKey(song.album) + '|' + normKey(song.artist || '');
-                          go(`/album/${key}`);
+                          goDetail(`/album/${key}`);
                         }
                       }}
                     />
@@ -595,8 +611,15 @@ export function SongMenuSheet() {
                           return;
                         }
                         const id = targets[0]?.id ?? (song.artist ? normKey(song.artist) : '');
-                        if (id) go(`/artist/${id}`);
+                        if (id) goDetail(`/artist/${id}`);
                       }}
+                    />
+                  ) : null}
+                  {song.artistId && !offline && radiosEnabled ? (
+                    <Action
+                      icon="radio-outline"
+                      label={t('Go to artist radio')}
+                      onPress={() => goDetail(`/artist-radio/${song.artistId}`)}
                     />
                   ) : null}
                   {downloaded ? (
@@ -635,6 +658,37 @@ export function SongMenuSheet() {
                       icon="mic-outline"
                       label={t('Lyrics')}
                       onPress={() => go('/lyrics')}
+                    />
+                  ) : null}
+                  {/* The player's buttons that are hidden from its bottom row,
+                      so hiding them does not hide what they open (#248). */}
+                  {extras.queue ? (
+                    <Action icon="layers-outline" label={t('View queue')} onPress={() => go('/queue')} />
+                  ) : null}
+                  {extras.devices ? (
+                    <Action
+                      icon="laptop-outline"
+                      label={t('Devices')}
+                      onPress={() => {
+                        const open = extras.devices!;
+                        dismiss(() => {
+                          closeNow();
+                          open();
+                        });
+                      }}
+                    />
+                  ) : null}
+                  {extras.speed ? (
+                    <Action
+                      icon="speedometer-outline"
+                      label={t('Playback speed')}
+                      onPress={() => {
+                        const open = extras.speed!;
+                        dismiss(() => {
+                          closeNow();
+                          open();
+                        });
+                      }}
                     />
                   ) : null}
                   {/* Online only (similar songs are found by the server) and not for

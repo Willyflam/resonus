@@ -1,5 +1,6 @@
 /** Colored card for a genre, with its first covers fanned out. Links to /genre/[name]. */
 import { Link } from 'expo-router';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COVER, coverArtUrl } from '@/api/data';
@@ -8,6 +9,7 @@ import { useGenreArt } from '@/hooks/useGenreArt';
 import { albumsLabel } from '@/i18n';
 import { useSettings } from '@/store/settings';
 import { fontSize, radius, spacing, themed, useTheme } from '@/theme';
+import { bump } from '@/lib/perfLog';
 
 /**
  * The card's height, and the size of the covers on it. Both fixed: the columns
@@ -98,7 +100,7 @@ function genreColors(name: string): { card: string; ink: string } {
   };
 }
 
-export function GenreCard({
+export const GenreCard = memo(function GenreCard({
   name,
   albumCount,
   width,
@@ -107,6 +109,7 @@ export function GenreCard({
   albumCount?: number;
   width?: number;
 }) {
+  bump('render · GenreCard');
   // Not for the card's own colour, which no longer follows the appearance, but
   // for the grey behind a cover that has not arrived: on Search the grid is
   // memoised, so nothing above would repaint these.
@@ -129,6 +132,10 @@ export function GenreCard({
   return (
     <Link href={`/genre/${encodeURIComponent(name)}`} asChild>
       <Pressable
+        // Painted once and moved as a texture: two turned covers with shadows,
+        // clipped to a rounded card, cost every frame of a scroll otherwise,
+        // and the grid stuttered more with each card whose art arrived.
+        renderToHardwareTextureAndroid
         style={StyleSheet.flatten([
           styles.card,
           { backgroundColor: card },
@@ -156,7 +163,7 @@ export function GenreCard({
       </Pressable>
     </Link>
   );
-}
+});
 
 const styles = themed((colors) => ({
   card: { height: GENRE_CARD_HEIGHT, borderRadius: radius.lg, overflow: 'hidden' },

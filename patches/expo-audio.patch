@@ -1,5 +1,5 @@
 diff --git a/android/src/main/AndroidManifest.xml b/android/src/main/AndroidManifest.xml
-index 36a19f2..3509de4 100644
+index 36a19f2d9c4a979a940ab681a1fb844ce45f7c75..5480b0a7f7f587c13cfb03292831766e130aa2b2 100644
 --- a/android/src/main/AndroidManifest.xml
 +++ b/android/src/main/AndroidManifest.xml
 @@ -1,3 +1,8 @@
@@ -12,7 +12,7 @@ index 36a19f2..3509de4 100644
 +  <uses-permission android:name="android.permission.WAKE_LOCK" />
  </manifest>
 diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
-index 992239b..7ecb7e0 100644
+index 992239ba7631ce0c97c0b41c5fbf61cc842386fe..3acd4b1b7e4bddc79bf9312323ddc3ac78f07bca 100644
 --- a/android/src/main/java/expo/modules/audio/AudioModule.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
 @@ -18,6 +18,7 @@ import androidx.media3.common.C.CONTENT_TYPE_HLS
@@ -23,16 +23,7 @@ index 992239b..7ecb7e0 100644
  import androidx.media3.common.Player
  import androidx.media3.common.util.Util
  import androidx.media3.datasource.DataSource
-@@ -28,6 +29,8 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
- import androidx.media3.exoplayer.smoothstreaming.SsMediaSource
- import androidx.media3.exoplayer.source.MediaSource
- import androidx.media3.exoplayer.source.ProgressiveMediaSource
-+import androidx.media3.extractor.DefaultExtractorsFactory
-+import androidx.media3.extractor.ExtractorsFactory
- import expo.modules.interfaces.permissions.Permissions
- import expo.modules.kotlin.Promise
- import expo.modules.kotlin.exception.Exceptions
-@@ -57,6 +60,8 @@ class AudioModule : Module() {
+@@ -57,6 +58,8 @@ class AudioModule : Module() {
    private var shouldPlayInBackground = false
    private var audioEnabled = true
    private var shouldRouteThroughEarpiece = false
@@ -41,7 +32,7 @@ index 992239b..7ecb7e0 100644
    private var focusAcquired = false
    private var interruptionMode: InterruptionMode? = null
    private var allowsBackgroundRecording = false
-@@ -140,6 +145,17 @@ class AudioModule : Module() {
+@@ -140,6 +143,17 @@ class AudioModule : Module() {
      return playsInSilentMode || audioManager.ringerMode == AudioManager.RINGER_MODE_NORMAL
    }
  
@@ -59,7 +50,7 @@ index 992239b..7ecb7e0 100644
    private fun requestAudioFocus() {
      if (focusAcquired || !audioEnabled || interruptionMode == InterruptionMode.MIX_WITH_OTHERS) {
        return
-@@ -148,14 +164,23 @@ class AudioModule : Module() {
+@@ -148,14 +162,23 @@ class AudioModule : Module() {
      val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
        val requestType = interruptionMode?.let {
          if (it == InterruptionMode.DO_NOT_MIX) {
@@ -85,7 +76,7 @@ index 992239b..7ecb7e0 100644
              .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
              .build()
          )
-@@ -169,7 +194,7 @@ class AudioModule : Module() {
+@@ -169,7 +192,7 @@ class AudioModule : Module() {
      } else {
        @Suppress("DEPRECATION")
        val requestType = if (interruptionMode == InterruptionMode.DO_NOT_MIX) {
@@ -94,7 +85,7 @@ index 992239b..7ecb7e0 100644
        } else {
          AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
        }
-@@ -363,7 +388,16 @@ class AudioModule : Module() {
+@@ -363,7 +386,16 @@ class AudioModule : Module() {
              bufferDurationMs
            )
            player.onPlaybackStateChange = { isPlaying ->
@@ -112,7 +103,7 @@ index 992239b..7ecb7e0 100644
                releaseAudioFocus()
              }
            }
-@@ -376,6 +410,15 @@ class AudioModule : Module() {
+@@ -376,6 +408,15 @@ class AudioModule : Module() {
          player.id
        }
  
@@ -128,7 +119,7 @@ index 992239b..7ecb7e0 100644
        Property("isBuffering") { player ->
          runOnMain {
            player.ref.playbackState == Player.STATE_BUFFERING
-@@ -507,6 +550,27 @@ class AudioModule : Module() {
+@@ -507,6 +548,27 @@ class AudioModule : Module() {
          }
        }
  
@@ -156,7 +147,7 @@ index 992239b..7ecb7e0 100644
        Function("setActiveForLockScreen") { ref: AudioPlayer, active: Boolean, metadata: Metadata?, options: AudioLockScreenOptions? ->
          runOnMain {
            ref.setActiveForLockScreen(active, metadata, options)
-@@ -519,12 +583,26 @@ class AudioModule : Module() {
+@@ -519,12 +581,26 @@ class AudioModule : Module() {
          }
        }
  
@@ -183,7 +174,7 @@ index 992239b..7ecb7e0 100644
        Function("setAudioSamplingEnabled") { player: AudioPlayer, enabled: Boolean ->
          runOnMain {
            player.setSamplingEnabled(enabled)
-@@ -685,7 +763,16 @@ class AudioModule : Module() {
+@@ -685,7 +761,16 @@ class AudioModule : Module() {
            }
            playlist.loadInitialPlaylist()
            playlist.onPlaybackStateChange = { isPlaying ->
@@ -201,7 +192,7 @@ index 992239b..7ecb7e0 100644
                releaseAudioFocus()
              }
            }
-@@ -860,13 +947,29 @@ class AudioModule : Module() {
+@@ -860,13 +945,29 @@ class AudioModule : Module() {
  
    private fun createMediaItem(source: AudioSource?): MediaSource? = source?.uri?.let { uriString ->
      val uri = uriString.toUri()
@@ -232,7 +223,7 @@ index 992239b..7ecb7e0 100644
  
      val preloadedBytes = AudioPreloadManager.get(uriString)
      val factory: DataSource.Factory = if (preloadedBytes != null) {
-@@ -914,10 +1017,32 @@ class AudioModule : Module() {
+@@ -914,10 +1015,32 @@ class AudioModule : Module() {
      }
    }
  
@@ -266,7 +257,7 @@ index 992239b..7ecb7e0 100644
    }
  
    private fun retrieveStreamType(uri: Uri): Int = Util.inferContentType(uri)
-@@ -931,11 +1056,37 @@ class AudioModule : Module() {
+@@ -931,7 +1054,7 @@ class AudioModule : Module() {
        CONTENT_TYPE_SS -> SsMediaSource.Factory(factory)
        CONTENT_TYPE_DASH -> DashMediaSource.Factory(factory)
        CONTENT_TYPE_HLS -> HlsMediaSource.Factory(factory)
@@ -275,38 +266,8 @@ index 992239b..7ecb7e0 100644
        else -> throw IllegalStateException("Unsupported type: $type")
      }.createMediaSource(mediaItem)
    }
- 
-+  /**
-+   * Extractors that can seek a file carrying no index of its own.
-+   *
-+   * A server transcoding on the fly writes into a pipe, so what comes out the
-+   * other end is a bare run of frames: Navidrome's AAC is raw ADTS, and an MP3
-+   * made that way carries a Xing header it never got to go back and fill in.
-+   * Downloaded, that is exactly what ends up on disk, and ExoPlayer does not
-+   * seek what it cannot index — it answers the seek by starting the track over
-+   * from zero, which is what somebody dragging the slider sees (#123).
-+   *
-+   * Constant bitrate seeking is the answer to that case and to no other: it
-+   * works out where a second lives from the length of the file and its
-+   * bitrate, and it is only consulted when the container offers nothing
-+   * better. A real MP4, a FLAC, or an MP3 with a header worth reading keeps
-+   * its own seek table. And these files are transcodes at a bitrate that was
-+   * asked for, which is the case the estimate is exact for.
-+   *
-+   * Deliberately not `setConstantBitrateSeekingAlwaysEnabled`: that one is for
-+   * sources whose length is unknown, which is the stream, not the download. A
-+   * transcode arriving over HTTP has no length and takes no range requests
-+   * either, so guessing a byte offset in it would get us nothing to play. That
-+   * one is re-requested from the server at the second we want instead.
-+   */
-+  private fun seekableExtractors(): ExtractorsFactory =
-+    DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
-+
-   private fun <T> runOnMain(block: () -> T): T =
-     runBlocking(appContext.mainQueue.coroutineContext) { block() }
- 
 diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
-index c76a9fd..7c9025a 100644
+index c76a9fd2a53743a691782e0f67d0d71401df58f6..d44d6822a4490c88f782e0cab14c318665590036 100644
 --- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
 @@ -8,15 +8,19 @@ import android.util.Log
@@ -541,7 +502,7 @@ index c76a9fd..7c9025a 100644
  
    private fun sendAudioSampleUpdate(sample: List<Float>) {
 diff --git a/android/src/main/java/expo/modules/audio/AudioRecords.kt b/android/src/main/java/expo/modules/audio/AudioRecords.kt
-index 86880d9..3404435 100644
+index 86880d92fd5b6413e8596e1b2b8ae28f2981addd..7f6248375cf03ffb5a1f9faa9e9b3d639ba70a76 100644
 --- a/android/src/main/java/expo/modules/audio/AudioRecords.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioRecords.kt
 @@ -12,7 +12,27 @@ import expo.modules.kotlin.types.OptimizedRecord
@@ -602,7 +563,7 @@ index 86880d9..3404435 100644
  
  enum class InterruptionMode(val value: String) : Enumerable {
 diff --git a/android/src/main/java/expo/modules/audio/AudioUtils.kt b/android/src/main/java/expo/modules/audio/AudioUtils.kt
-index dca91c3..089dcee 100644
+index dca91c32a2787a7bc3ecba26f0f3f2ad9cc40d3d..354120331123b4a86378cd05d4fcdbd6c865c5f7 100644
 --- a/android/src/main/java/expo/modules/audio/AudioUtils.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioUtils.kt
 @@ -3,6 +3,8 @@ package expo.modules.audio
@@ -742,7 +703,7 @@ index dca91c3..089dcee 100644
      .build()
  }
 diff --git a/android/src/main/java/expo/modules/audio/BaseAudioPlayer.kt b/android/src/main/java/expo/modules/audio/BaseAudioPlayer.kt
-index 149e907..422d2d1 100644
+index 149e9075c8630b14a69318aa6c37d9ff82b23f05..40f5d256923a603933c7c436367bac864d832b50 100644
 --- a/android/src/main/java/expo/modules/audio/BaseAudioPlayer.kt
 +++ b/android/src/main/java/expo/modules/audio/BaseAudioPlayer.kt
 @@ -78,7 +78,6 @@ abstract class BaseAudioPlayer(
@@ -776,8 +737,439 @@ index 149e907..422d2d1 100644
          sendStatusUpdate(mapOf("playing" to isPlaying))
        }
  
+diff --git a/android/src/main/java/expo/modules/audio/FragmentSeekingExtractor.kt b/android/src/main/java/expo/modules/audio/FragmentSeekingExtractor.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..a4e9d208d0fa8f34440bc355de02f81129c91a76
+--- /dev/null
++++ b/android/src/main/java/expo/modules/audio/FragmentSeekingExtractor.kt
+@@ -0,0 +1,425 @@
++package expo.modules.audio
++
++import android.net.Uri
++import androidx.media3.common.C
++import androidx.media3.common.DataReader
++import androidx.media3.common.Format
++import androidx.media3.common.util.ParsableByteArray
++import androidx.media3.extractor.DefaultExtractorsFactory
++import androidx.media3.extractor.Extractor
++import androidx.media3.extractor.ExtractorInput
++import androidx.media3.extractor.ExtractorOutput
++import androidx.media3.extractor.ExtractorsFactory
++import androidx.media3.extractor.PositionHolder
++import androidx.media3.extractor.SeekMap
++import androidx.media3.extractor.SeekPoint
++import androidx.media3.extractor.SniffFailure
++import androidx.media3.extractor.TrackOutput
++import androidx.media3.extractor.mp4.FragmentedMp4Extractor
++import androidx.media3.extractor.text.SubtitleParser
++
++/**
++ * Extractors that can seek a file carrying no index of its own.
++ *
++ * A server transcoding on the fly writes into a pipe, so what comes out the
++ * other end is a bare run of frames: Navidrome's AAC is raw ADTS, and an MP3
++ * made that way carries a Xing header it never got to go back and fill in.
++ * Downloaded, that is exactly what ends up on disk, and ExoPlayer does not
++ * seek what it cannot index: it answers the seek by starting the track over
++ * from zero, which is what somebody dragging the slider sees (#123).
++ *
++ * Constant bitrate seeking is the answer to that case and to no other: it
++ * works out where a second lives from the length of the file and its
++ * bitrate, and it is only consulted when the container offers nothing
++ * better. A real MP4, a FLAC, or an MP3 with a header worth reading keeps
++ * its own seek table. And these files are transcodes at a bitrate that was
++ * asked for, which is the case the estimate is exact for.
++ *
++ * Deliberately not `setConstantBitrateSeekingAlwaysEnabled`: that one is for
++ * sources whose length is unknown, which is the stream, not the download. A
++ * transcode arriving over HTTP has no length and takes no range requests
++ * either, so guessing a byte offset in it would get us nothing to play. That
++ * one is re-requested from the server at the second we want instead.
++ *
++ * A fragmented M4A without an index is the other file media3 will not seek,
++ * and `FragmentSeekingExtractorsFactory` covers that one (#242).
++ *
++ * Kept out of AudioModule so `pnpm harness:extractor` runs this very factory.
++ */
++internal fun seekableExtractors(): ExtractorsFactory =
++  FragmentSeekingExtractorsFactory(DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true))
++
++/**
++ * Seeking in a fragmented MP4 that carries no index (#242).
++ *
++ * A fragmented M4A is a run of small `moof` + `mdat` pairs, and the only index
++ * media3 seeks one with is a `sidx` box up front. Plenty of files have none
++ * (anything saved straight from a DASH stream, which is what most rippers do),
++ * and media3 treats every seek into those as a seek to zero: drag the slider
++ * and the song starts over.
++ *
++ * Every fragment opens with the time it starts at (`tfdt`), though, so the
++ * file can be searched. When the fragmented extractor gives up, this reads the
++ * last fragment once to learn how long the song is, hands ExoPlayer a map from
++ * the first fragment to the last, and on each seek homes in on the fragment
++ * holding the second asked for, a few reads at most, before letting the real
++ * extractor carry on from there.
++ */
++internal class FragmentSeekingExtractorsFactory(
++  private val base: ExtractorsFactory
++) : ExtractorsFactory {
++  override fun createExtractors(): Array<Extractor> = wrap(base.createExtractors())
++
++  override fun createExtractors(uri: Uri, responseHeaders: Map<String, List<String>>): Array<Extractor> =
++    wrap(base.createExtractors(uri, responseHeaders))
++
++  override fun setSubtitleParserFactory(factory: SubtitleParser.Factory): ExtractorsFactory {
++    base.setSubtitleParserFactory(factory)
++    return this
++  }
++
++  @Deprecated("Deprecated in media3")
++  override fun experimentalSetTextTrackTranscodingEnabled(enabled: Boolean): ExtractorsFactory {
++    @Suppress("DEPRECATION")
++    base.experimentalSetTextTrackTranscodingEnabled(enabled)
++    return this
++  }
++
++  override fun experimentalSetCodecsToParseWithinGopSampleDependencies(codecs: Int): ExtractorsFactory {
++    base.experimentalSetCodecsToParseWithinGopSampleDependencies(codecs)
++    return this
++  }
++
++  private fun wrap(extractors: Array<Extractor>): Array<Extractor> =
++    Array(extractors.size) { i ->
++      val e = extractors[i]
++      if (e is FragmentedMp4Extractor) FragmentSeekingExtractor(e) else e
++    }
++}
++
++internal class FragmentSeekingExtractor(private val inner: Extractor) : Extractor {
++  private var input: ExtractorInput? = null
++  private lateinit var output: ExtractorOutput
++
++  /** Of the audio track, from its `mdhd`; 0 when it could not be read. */
++  private var timescale = 0L
++  private var declaredDurationUs = C.TIME_UNSET
++  private var firstFragment = C.INDEX_UNSET.toLong()
++
++  /** Set when the map was held back, until the extractor stops for the first time. */
++  private var tailPending = false
++
++  /** Where the extractor was when the last fragment was read, to go back to. */
++  private var resumeAt = C.INDEX_UNSET.toLong()
++  private var readingTail = false
++
++  /** Fragments whose start is known, by position. Our map is live when set. */
++  private var known: MutableList<Fragment>? = null
++
++  private var seekTargetUs = C.TIME_UNSET
++  private var seekHops = 0
++
++  /** No fragment starting before `timeUs` lies at or past `position`: where
++   *  the last scan began that only found one starting too late. */
++  private var ceiling: Fragment? = null
++
++  override fun sniff(input: ExtractorInput): Boolean = inner.sniff(input)
++
++  override fun getSniffFailureDetails(): List<SniffFailure> = inner.sniffFailureDetails
++
++  override fun init(output: ExtractorOutput) {
++    this.output = output
++    inner.init(Output(output))
++  }
++
++  override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int {
++    this.input = input
++    if (timescale == 0L && input.position == 0L) timescale = readTimescale(input)
++    if (resumeAt != C.INDEX_UNSET.toLong()) return readTail(input, seekPosition)
++    if (seekTargetUs != C.TIME_UNSET) {
++      val result = homeIn(input, seekPosition)
++      if (result != null) return result
++    }
++    val result = inner.read(input, seekPosition)
++    // The map is sent from inside the read, which carries on to the end of the
++    // first sample: that is the byte to come back to, not the one the map was
++    // sent from, or the rest of the first fragment comes out as noise.
++    if (tailPending) {
++      tailPending = false
++      if (result == Extractor.RESULT_CONTINUE) resumeAt = input.position
++      else output.seekMap(SeekMap.Unseekable(declaredDurationUs))
++    }
++    return result
++  }
++
++  override fun seek(position: Long, timeUs: Long) {
++    inner.seek(position, timeUs)
++    // Zero is the start of the file, not the middle of a fragment: the
++    // extractor reads the header again and needs no help.
++    seekTargetUs = if (known != null && position > 0) timeUs else C.TIME_UNSET
++    seekHops = 0
++    ceiling = null
++  }
++
++  override fun release() = inner.release()
++
++  /**
++   * Out to the last fragment and back. Its start, and the one before it, say
++   * how long the song is; the extractor never sees the trip, since it picks up
++   * again at the very byte it left.
++   */
++  private fun readTail(input: ExtractorInput, seekPosition: PositionHolder): Int {
++    val length = input.length
++    if (!readingTail) {
++      readingTail = true
++      seekPosition.position = maxOf(resumeAt, length - TAIL_BYTES)
++      return Extractor.RESULT_SEEK
++    }
++    val bytes = peekUpTo(input, (length - input.position).coerceAtMost(TAIL_BYTES.toLong()).toInt())
++    val fragments = mutableListOf<Fragment>()
++    var k = 0
++    while (k <= bytes.size - BOX_HEAD) {
++      if (isFragmentAt(bytes, k)) {
++        val t = fragmentTimeUs(bytes, k)
++        if (t != C.TIME_UNSET) fragments.add(Fragment(input.position + k, t))
++      }
++      k++
++    }
++    val last = fragments.lastOrNull()
++    if (last == null || last.timeUs <= 0) {
++      output.seekMap(SeekMap.Unseekable(declaredDurationUs))
++    } else {
++      // The last fragment lasts about as long as the one before it did.
++      val span = if (fragments.size > 1) last.timeUs - fragments[fragments.size - 2].timeUs else 0L
++      val guessUs = last.timeUs + span
++      val declared = declaredDurationUs
++      val durationUs = if (declared != C.TIME_UNSET && declared >= last.timeUs && declared <= guessUs + span) declared else guessUs
++      known = (listOf(Fragment(firstFragment, 0)) + fragments).toMutableList()
++      output.seekMap(FragmentSeekMap(durationUs, firstFragment, last))
++    }
++    seekPosition.position = resumeAt
++    resumeAt = C.INDEX_UNSET.toLong()
++    return Extractor.RESULT_SEEK
++  }
++
++  /**
++   * One step towards the fragment that holds the second asked for: finds the
++   * next fragment from here and either settles on it or jumps again, in
++   * proportion between the closest fragments known on either side. Null once
++   * settled with the input at a fragment the extractor can read.
++   */
++  private fun homeIn(input: ExtractorInput, seekPosition: PositionHolder): Int? {
++    val known = known ?: return null
++    val target = seekTargetUs
++    val scanFrom = input.position
++    val nearby = nextFragments(input)
++    val found = nearby.firstOrNull()
++    for (f in nearby) if (known.none { it.position == f.position }) known.add(f)
++    known.sortBy { it.position }
++    val before = known.lastOrNull { it.timeUs <= target }
++    val after = known.firstOrNull { it.timeUs > target }
++    val settle = when {
++      // Past the last fragment: the last one that starts in time.
++      found == null -> before
++      // The read may have gone past the second asked for: the last fragment of
++      // it that starts in time, if it is close enough.
++      before != null && before.position >= found.position && target - before.timeUs <= CLOSE_ENOUGH_US -> before
++      // Nothing lies between `before` and one that starts too late, so the
++      // second asked for is inside `before`: straight from it to the next, or
++      // both side by side in this read.
++      before != null && after != null &&
++        ((found == after && scanFrom <= before.position + 1) ||
++          (before in nearby && nearby.getOrNull(nearby.indexOf(before) + 1) == after)) -> before
++      seekHops >= MAX_HOPS -> before ?: found
++      else -> null
++    }
++    if (settle != null || found == null) {
++      seekTargetUs = C.TIME_UNSET
++      if (settle == null) return Extractor.RESULT_END_OF_INPUT
++      if (settle.position == input.position) return null
++      seekPosition.position = settle.position
++      return Extractor.RESULT_SEEK
++    }
++    seekHops++
++    if (found.timeUs > target && scanFrom < (ceiling?.position ?: Long.MAX_VALUE)) {
++      ceiling = Fragment(scanFrom, found.timeUs)
++    }
++    val lo = before ?: known.first()
++    val hi = listOfNotNull(after, ceiling).minByOrNull { it.position } ?: known.last()
++    val aimUs = (target - LEAD_US).coerceAtLeast(lo.timeUs)
++    // Bytes are only roughly in proportion to time (a quiet intro takes next to
++    // nothing), so every other jump halves the gap instead: that bounds the
++    // search however wrong the proportion is.
++    val share = when {
++      // A gap one read covers is read whole, from its start.
++      hi.position - lo.position <= SCAN_BYTES -> 0.0
++      seekHops % 2 == 0 -> 0.5
++      hi.timeUs > lo.timeUs -> (aimUs - lo.timeUs).toDouble() / (hi.timeUs - lo.timeUs)
++      else -> 0.0
++    }
++    val next = lo.position + ((hi.position - lo.position) * share).toLong()
++    // Always past `lo`, so the scan finds the fragment after it at worst.
++    seekPosition.position = next.coerceIn(lo.position + 1, maxOf(lo.position + 1, hi.position - 1))
++    return Extractor.RESULT_SEEK
++  }
++
++  /**
++   * The fragments from the input's position on, as many as sit in one read,
++   * the nearest first; empty when there are none. Skips what comes before the
++   * first, so the input may be left further on than it was.
++   */
++  private fun nextFragments(input: ExtractorInput): List<Fragment> {
++    var scanned = 0L
++    while (scanned < MAX_SCAN_BYTES) {
++      input.resetPeekPosition()
++      val bytes = peekUpTo(input, SCAN_BYTES)
++      input.resetPeekPosition()
++      if (bytes.size < BOX_HEAD) return emptyList()
++      val found = mutableListOf<Fragment>()
++      for (k in 0..bytes.size - BOX_HEAD) {
++        if (!isFragmentAt(bytes, k)) continue
++        val t = if (k + int(bytes, k) <= bytes.size) {
++          fragmentTimeUs(bytes, k)
++        } else if (found.isEmpty()) {
++          // The nearest one's `tfdt` may sit past this read: look at all of it.
++          input.advancePeekPosition(k)
++          val moof = peekUpTo(input, int(bytes, k).coerceAtMost(MAX_MOOF_BYTES))
++          input.resetPeekPosition()
++          fragmentTimeUs(moof, 0)
++        } else {
++          C.TIME_UNSET
++        }
++        if (t != C.TIME_UNSET) found.add(Fragment(input.position + k, t))
++        else if (found.isEmpty()) return emptyList()
++      }
++      if (found.isNotEmpty()) return found
++      val step = bytes.size - BOX_HEAD + 1
++      input.skipFully(step)
++      scanned += step
++    }
++    return emptyList()
++  }
++
++  /** Reads what is there, up to `max` bytes, from the peek position on. */
++  private fun peekUpTo(input: ExtractorInput, max: Int): ByteArray {
++    val buf = ByteArray(max)
++    var n = 0
++    while (n < max) {
++      val read = input.peek(buf, n, max - n)
++      if (read == C.RESULT_END_OF_INPUT) break
++      n += read
++    }
++    return if (n == max) buf else buf.copyOf(n)
++  }
++
++  /** The track's timescale from the `mdhd` in the header, or 0. */
++  private fun readTimescale(input: ExtractorInput): Long {
++    input.resetPeekPosition()
++    val bytes = peekUpTo(input, HEADER_BYTES)
++    input.resetPeekPosition()
++    val i = find(bytes, MDHD, 0)
++    if (i < 0 || i + 8 > bytes.size) return 0
++    val v1 = bytes[i + 4].toInt() == 1
++    val at = i + 8 + if (v1) 16 else 8
++    return if (at + 4 <= bytes.size) int(bytes, at).toLong() and 0xffffffffL else 0
++  }
++
++  /** When the fragment at `k` starts, from its `tfdt`. */
++  private fun fragmentTimeUs(b: ByteArray, k: Int): Long {
++    if (timescale <= 0) return C.TIME_UNSET
++    val end = (k + int(b, k)).coerceAtMost(b.size)
++    val i = find(b, TFDT, k, end)
++    if (i < 0 || i + 8 > end) return C.TIME_UNSET
++    val v1 = b[i + 4].toInt() == 1
++    val at = i + 8
++    val units = if (v1) {
++      if (at + 8 > end) return C.TIME_UNSET
++      (int(b, at).toLong() shl 32) or (int(b, at + 4).toLong() and 0xffffffffL)
++    } else {
++      if (at + 4 > end) return C.TIME_UNSET
++      int(b, at).toLong() and 0xffffffffL
++    }
++    return units * 1_000_000L / timescale
++  }
++
++  private inner class Output(private val out: ExtractorOutput) : ExtractorOutput {
++    override fun track(id: Int, type: Int): TrackOutput = out.track(id, type)
++
++    override fun endTracks() = out.endTracks()
++
++    override fun seekMap(seekMap: SeekMap) {
++      val input = input
++      // A `sidx` beats anything worked out here, and without a length (a
++      // stream generated on the fly) there is no last fragment to go and read.
++      if (seekMap.isSeekable || input == null || input.length == C.LENGTH_UNSET.toLong() || timescale <= 0) {
++        out.seekMap(seekMap)
++        return
++      }
++      // Sent the moment the first `moof` header has been read.
++      declaredDurationUs = seekMap.durationUs
++      firstFragment = input.position - 8
++      tailPending = true
++    }
++  }
++
++  private data class Fragment(val position: Long, val timeUs: Long)
++
++  /** Between the first fragment and the last, in proportion. Only a first
++   *  guess: `homeIn` takes it from there. */
++  private class FragmentSeekMap(
++    private val durationUs: Long,
++    private val first: Long,
++    private val last: Fragment
++  ) : SeekMap {
++    override fun isSeekable() = true
++
++    override fun getDurationUs() = durationUs
++
++    override fun getSeekPoints(timeUs: Long): SeekMap.SeekPoints {
++      if (timeUs <= 0) return SeekMap.SeekPoints(SeekPoint(timeUs, 0))
++      val share = ((timeUs - LEAD_US).toDouble() / last.timeUs).coerceIn(0.0, 1.0)
++      val position = first + ((last.position - first) * share).toLong()
++      return SeekMap.SeekPoints(SeekPoint(timeUs, position.coerceAtLeast(first + 1)))
++    }
++  }
++
++  private companion object {
++    const val HEADER_BYTES = 64 * 1024
++    const val TAIL_BYTES = 1024 * 1024
++    const val SCAN_BYTES = 64 * 1024
++    const val MAX_SCAN_BYTES = 16L * 1024 * 1024
++    const val MAX_MOOF_BYTES = 256 * 1024
++    const val MAX_HOPS = 12
++    /** A `moof` header and the `mfhd` that always opens it. */
++    const val BOX_HEAD = 16
++    /** Landing this far before the second asked for is as good as on it:
++     *  ExoPlayer skips the rest itself. */
++    const val CLOSE_ENOUGH_US = 10_000_000L
++    /** How far ahead of the second asked for each jump aims. */
++    const val LEAD_US = 2_000_000L
++
++    val MDHD = "mdhd".toByteArray()
++    val TFDT = "tfdt".toByteArray()
++
++    fun isFragmentAt(b: ByteArray, k: Int): Boolean =
++      b[k + 4] == 'm'.code.toByte() && b[k + 5] == 'o'.code.toByte() &&
++        b[k + 6] == 'o'.code.toByte() && b[k + 7] == 'f'.code.toByte() &&
++        b[k + 12] == 'm'.code.toByte() && b[k + 13] == 'f'.code.toByte() &&
++        b[k + 14] == 'h'.code.toByte() && b[k + 15] == 'd'.code.toByte() &&
++        int(b, k) >= BOX_HEAD + 8 && int(b, k + 8) == 16
++
++    /** Where the four letters of a box type are, from `from + 4`; -1 if absent. */
++    fun find(b: ByteArray, type: ByteArray, from: Int, to: Int = b.size): Int {
++      var i = from + 4
++      while (i + 4 <= to) {
++        if (b[i] == type[0] && b[i + 1] == type[1] && b[i + 2] == type[2] && b[i + 3] == type[3]) return i
++        i++
++      }
++      return -1
++    }
++
++    fun int(b: ByteArray, k: Int): Int =
++      (b[k].toInt() and 0xff shl 24) or (b[k + 1].toInt() and 0xff shl 16) or
++        (b[k + 2].toInt() and 0xff shl 8) or (b[k + 3].toInt() and 0xff)
++  }
++}
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
-index 196a5d5..4e093dc 100644
+index 196a5d57f887c2667a88543bd2f6a80044a044f2..0ddb26beedd3ca3ac064bf3682564c120e60f780 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 @@ -27,6 +27,7 @@ import expo.modules.audio.AudioLockScreenOptions
@@ -1029,7 +1421,7 @@ index 196a5d5..4e093dc 100644
      const val SEEK_INTERVAL_MS = 10000L
    }
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
-index 839aaef..1aff509 100644
+index 839aaef12d7699ea1a89037b31849775daa079f4..a7785cd6b1fc49c5b51fede555bd675590ebb96f 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 @@ -1,6 +1,9 @@
@@ -1118,7 +1510,7 @@ index 839aaef..1aff509 100644
      return super.onCustomCommand(session, controller, command, args)
    }
 diff --git a/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt b/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
-index 18203a3..77155f4 100644
+index 18203a364d17dcf3de95d22a20175308e3363889..1f246fe53678289de51c7b63adff3a271c1919b1 100644
 --- a/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
 +++ b/android/src/main/java/expo/modules/audio/service/MetadataInjectingPlayer.kt
 @@ -3,10 +3,20 @@ package expo.modules.audio.service
@@ -1326,7 +1718,7 @@ index 18203a3..77155f4 100644
  }
 diff --git a/android/src/main/java/expo/modules/audio/service/PreloadingBitmapLoader.kt b/android/src/main/java/expo/modules/audio/service/PreloadingBitmapLoader.kt
 new file mode 100644
-index 0000000..6ee23d5
+index 0000000000000000000000000000000000000000..e0bd757158c66f762766a76e6c486cbd26e0a827
 --- /dev/null
 +++ b/android/src/main/java/expo/modules/audio/service/PreloadingBitmapLoader.kt
 @@ -0,0 +1,77 @@
@@ -1408,10 +1800,10 @@ index 0000000..6ee23d5
 +  }
 +}
 diff --git a/build/Audio.types.d.ts b/build/Audio.types.d.ts
-index 2560478..b80696e 100644
+index 25604783649fe9b64f6655172f08471a5efcbf45..885474cb5e5ce99b758c307f95bb6782d6d63ba0 100644
 --- a/build/Audio.types.d.ts
 +++ b/build/Audio.types.d.ts
-@@ -34,6 +34,20 @@ export type AudioSource = string | number | null | {
+@@ -34,6 +34,28 @@ export type AudioSource = string | number | null | {
       * Useful for showing track names in a queue or playlist UI.
       */
      name?: string;
@@ -1419,7 +1811,8 @@ index 2560478..b80696e 100644
 +     * What this track is, for the media session (Bluetooth, Android Auto, the
 +     * system's own controls). Their metadata comes from the item, not from
 +     * `setActiveForLockScreen`, and the fields given here win over the tags
-+     * carried by the stream — which a transcode arrives without. Android only.
++     * carried by the stream — which a transcode arrives without. Android reads
++     * it for the session; iOS takes the cover from it, fetched ahead of time.
 +     */
 +    metadata?: AudioMetadata;
 +    /**
@@ -1429,10 +1822,17 @@ index 2560478..b80696e 100644
 +     * goes out to every connected controller. Android only.
 +     */
 +    mediaId?: string;
++    /**
++     * Whether the asset resolves seeks to the exact frame, which costs a scan of
++     * the file for an index first — on a streamed mp3, a wait before anything
++     * plays. Defaults to `true`. Set it to `false` for short previews that only
++     * need to land near a position. iOS only.
++     */
++    preferPreciseTiming?: boolean;
  };
  /**
   * Options for configuring audio player behavior.
-@@ -618,6 +632,15 @@ export type AudioMetadata = {
+@@ -618,6 +640,15 @@ export type AudioMetadata = {
      artist?: string;
      albumTitle?: string;
      artworkUrl?: string;
@@ -1449,7 +1849,7 @@ index 2560478..b80696e 100644
  /**
   * Loop mode for audio playlist playback.
 diff --git a/build/AudioConstants.d.ts b/build/AudioConstants.d.ts
-index cfd92ad..78fa084 100644
+index cfd92ad0ff5765254c4e6db974fe44bce34aad06..d16fb49bb630dd95f26abfb6260ade9cbf3bee23 100644
 --- a/build/AudioConstants.d.ts
 +++ b/build/AudioConstants.d.ts
 @@ -15,5 +15,9 @@ export type AudioLockScreenOptions = {
@@ -1464,10 +1864,29 @@ index cfd92ad..78fa084 100644
  //# sourceMappingURL=AudioConstants.d.ts.map
 \ No newline at end of file
 diff --git a/build/AudioModule.types.d.ts b/build/AudioModule.types.d.ts
-index f3ae4ee..5bc46da 100644
+index f3ae4ee4044d86032cd5c6dbcfee6f905d1ce99f..f0ef7c9b823ce5c7154f9f1af88fe1f11ff21763 100644
 --- a/build/AudioModule.types.d.ts
 +++ b/build/AudioModule.types.d.ts
-@@ -31,6 +31,11 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
+@@ -16,6 +16,18 @@ export declare class NativeAudioModule extends NativeModule {
+     clearPreloadedSource(source: AudioSource): Promise<void>;
+     clearAllPreloadedSources(): Promise<void>;
+     getPreloadedSources(): Promise<string[]>;
++    /**
++     * Starts the cover at `url` downloading — and, when it animates, its clip
++     * encoding — with no track attached: the queue ahead is warmed this way,
++     * and the lock screen reads the result the moment each track starts.
++     * @param url The cover's URL, as metadata carries it.
++     */
++    warmArtwork(url: string): void;
++    /**
++     * Sets the fps animated covers encode at from here on (30 by default).
++     * @param fps The frame rate, 30 or 60.
++     */
++    setArtworkFps(fps: number): void;
+     readonly AudioPlayer: typeof AudioPlayer;
+     readonly AudioRecorder: typeof AudioRecorder;
+     readonly AudioPlaylist: typeof AudioPlaylist;
+@@ -31,6 +43,11 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
       * Unique identifier for the player object.
       */
      id: string;
@@ -1479,7 +1898,7 @@ index f3ae4ee..5bc46da 100644
      /**
       * Boolean value indicating whether the player is currently playing.
       */
-@@ -141,6 +146,14 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
+@@ -141,6 +158,14 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
       * Replaces the current audio source with a new one.
       */
      replace(source: AudioSource): void;
@@ -1494,7 +1913,7 @@ index f3ae4ee..5bc46da 100644
      /**
       * Seeks the playback by the given number of seconds.
       * @param seconds The number of seconds to seek by.
-@@ -183,6 +196,24 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
+@@ -183,6 +208,24 @@ export declare class AudioPlayer extends SharedObject<AudioEvents> {
       * This will clear the lock screen's now playing info.
       */
      clearLockScreenControls(): void;
@@ -1519,7 +1938,7 @@ index f3ae4ee..5bc46da 100644
      /**
       * Remove the player from memory to free up resources.
       */
-@@ -222,6 +253,29 @@ export type AudioEvents = {
+@@ -222,6 +265,29 @@ export type AudioEvents = {
      playbackStatusUpdate(status: AudioStatus): void;
      /** Fired when audio sampling is enabled and new sample data is available. */
      audioSampleUpdate(data: AudioSample): void;
@@ -1551,10 +1970,10 @@ index f3ae4ee..5bc46da 100644
      /**
 diff --git a/ios/AnimatedArtwork.swift b/ios/AnimatedArtwork.swift
 new file mode 100644
-index 0000000..fbc89d8
+index 0000000000000000000000000000000000000000..7e949bf2fb325d00f0ae39ce158d5365de15228a
 --- /dev/null
 +++ b/ios/AnimatedArtwork.swift
-@@ -0,0 +1,569 @@
+@@ -0,0 +1,702 @@
 +import AVFoundation
 +import CoreGraphics
 +import CoreImage
@@ -1574,9 +1993,25 @@ index 0000000..fbc89d8
 +  // 900 frames is 30 fps across the whole 29 seconds, so this cap only bites
 +  // on content that could not have been carried at full rate anyway.
 +  private static let maxFrames = 900
-+  // The system may not display artwork above 60 fps (Apple, "Providing
-+  // animated artwork for media items"), so anything faster is sampled down.
-+  private static let maxPlaybackRate = 60.0
++  // The frame-rate ceiling, and the system's own limit above it (Apple,
++  // "Providing animated artwork for media items": not above 60 fps). The cap
++  // is 30 by default — half the frames to decode and to encode, for a cover
++  // that reads the same — and Settings rewrites it through
++  // `AudioModule.setArtworkFps`.
++  private static let rateLock = NSLock()
++  private static var rateCap = 30.0
++  static var maxPlaybackRate: Double {
++    get {
++      rateLock.lock()
++      defer { rateLock.unlock() }
++      return rateCap
++    }
++    set {
++      rateLock.lock()
++      defer { rateLock.unlock() }
++      rateCap = newValue
++    }
++  }
 +  // The system prefers a clip that is *less than* 30 seconds, so stop at 29.
 +  private static let maxDuration = 29.0
 +  private static let minFrameDelay = 1.0 / 60.0
@@ -1584,6 +2019,13 @@ index 0000000..fbc89d8
 +  private static let browserDelayFloor = 0.011
 +  private static let frameOptions = [kCGImageSourceShouldCache: false] as CFDictionary
 +  private static let blurContext = CIContext()
++  private static let deviceRGB = CGColorSpaceCreateDeviceRGB()
++
++  /// One encode per destination, shared by every instance holding the same
++  /// clip: an evicted and refetched cover joins the task already writing its
++  /// file instead of racing a second encoder at the same path.
++  private static let sharedTaskLock = NSLock()
++  private static var sharedTasks: [String: Task<URL?, Never>] = [:]
 +
 +  private enum Ratio {
 +    case square
@@ -1617,11 +2059,39 @@ index 0000000..fbc89d8
 +  private let lock = NSLock()
 +  private var encodeTask: Task<URL?, Never>?
 +
-+  /// Both variants the system can ask for. The square one needs a square
-+  /// source, the tall one takes any cover: it is the key the iPhone lock
-+  /// screen draws full screen, and providing only `1x1` left that screen with
-+  /// the static artwork.
-+  static func make(url: URL, data: Data) -> (square: MPMediaItemAnimatedArtwork?, tall: MPMediaItemAnimatedArtwork?) {
++  /// The object the lock screen is handed, built out of this clip. What
++  /// carries it is the file behind it, so the caller publishes it only once
++  /// `isOnDisk` and never before.
++  private(set) var item: MPMediaItemAnimatedArtwork?
++
++  /// The clip is written out: the system opens it the moment it is asked for
++  /// it. Named for the file, not for the encoding, which has a method of its
++  /// own called `isReady`.
++  var isOnDisk: Bool {
++    FileManager.default.fileExists(atPath: destination.path)
++  }
++
++  /// Calls `onReady` from the task that wrote the clip, once it is on disk
++  /// (right away when it already was). Encoding starts here instead of on the
++  /// system's request: that request arrives with the artwork itself, and one
++  /// answered after the wait left the lock screen on the preview frame — the
++  /// clip was ready all along, nothing told the system to ask again.
++  func whenReady(_ onReady: @escaping () -> Void) {
++    // `.userInitiated`, not `.utility`: this runs when the lock screen is
++    // waiting for the clip, often with the phone locked — the one moment
++    // `.utility` gets almost no CPU.
++    Task.detached(priority: .userInitiated) {
++      _ = await self.videoURL()
++      onReady()
++    }
++  }
++
++  /// The clips the system can ask for: the tall one only. It is the key the
++  /// iPhone lock screen draws full screen, and providing only `1x1` left that
++  /// screen with the static artwork — the square variant that used to be
++  /// built beside it is gone now, which halves the encode and leaves the
++  /// system to show its static cover wherever it would have asked for `1x1`.
++  static func make(url: URL, data: Data) -> (square: AnimatedArtwork?, tall: AnimatedArtwork?) {
 +    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
 +          CGImageSourceGetCount(source) > 1,
 +          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]
@@ -1637,14 +2107,8 @@ index 0000000..fbc89d8
 +    }
 +    let sourceSize = CGSize(width: width, height: height)
 +    let id = identifier(for: url)
-+    let square: MPMediaItemAnimatedArtwork?
-+    if abs(width - height) * 100 <= max(width, height) {
-+      square = variant(id: id, ratio: .square, sourceSize: sourceSize, frame: frame, url: url, data: data)
-+    } else {
-+      square = nil
-+    }
 +    let tall = variant(id: id, ratio: .tall, sourceSize: sourceSize, frame: frame, url: url, data: data)
-+    return (square: square, tall: tall)
++    return (square: nil, tall: tall)
 +  }
 +
 +  private static func variant(
@@ -1654,7 +2118,7 @@ index 0000000..fbc89d8
 +    frame: CGImage,
 +    url: URL,
 +    data: Data
-+  ) -> MPMediaItemAnimatedArtwork? {
++  ) -> AnimatedArtwork? {
 +    guard let destination = cacheFile(id: id, ratio: ratio) else {
 +      return nil
 +    }
@@ -1666,11 +2130,12 @@ index 0000000..fbc89d8
 +      data: data
 +    )
 +    let preview = artwork.previewFrame(frame)
-+    return MPMediaItemAnimatedArtwork(
++    artwork.item = MPMediaItemAnimatedArtwork(
 +      artworkID: artwork.artworkID,
 +      previewImageRequestHandler: { _ in preview },
 +      videoAssetFileURLRequestHandler: { _ in await artwork.videoURL() }
 +    )
++    return artwork
 +  }
 +
 +  private init(artworkID: String, ratio: Ratio, sourceSize: CGSize, destination: URL, data: Data) {
@@ -1697,13 +2162,22 @@ index 0000000..fbc89d8
 +
 +  /// The preview is built with the variant's aspect ratio from the first
 +  /// frame: a preview that does not match the key makes the system drop the
-+  /// animated artwork and fall back to the static one.
++  /// animated artwork and fall back to the static one. It is composed the
++  /// same way the clip's frames are — same sized backdrop, same feather
++  /// mask — so the two cannot drift apart.
 +  private func previewFrame(_ frame: CGImage) -> UIImage {
 +    let size = canvas
 +    let format = UIGraphicsImageRendererFormat()
 +    format.scale = 1
-+    format.opaque = true
-+    let backdrop = ratio == .tall ? Self.blurred(frame) : nil
++    // Not opaque: the composition leans on alpha while it builds, and the
++    // backdrop underneath makes the result opaque anyway.
++    format.opaque = false
++    var backdrop: CGImage? = nil
++    var mask: CGImage? = nil
++    if ratio == .tall {
++      backdrop = Self.blurred(frame).flatMap { Self.sized($0, to: size) }
++      mask = Self.featherMask(size: Self.artRect(in: size).size)
++    }
 +    return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
 +      let context = renderer.cgContext
 +      // UIKit contexts are flipped, so a CGImage drawn straight comes out
@@ -1712,75 +2186,118 @@ index 0000000..fbc89d8
 +      context.saveGState()
 +      context.translateBy(x: 0, y: size.height)
 +      context.scaleBy(x: 1, y: -1)
-+      draw(frame, in: context, canvas: size, backdrop: backdrop)
++      draw(frame, in: context, canvas: size, backdrop: backdrop, mask: mask)
 +      context.restoreGState()
 +    }
 +  }
 +
-+  private func draw(_ frame: CGImage, in context: CGContext, canvas: CGSize, backdrop: CGImage?) {
++  /// The square the cover sits in on the tall canvas, centred on it.
++  private static func artRect(in canvas: CGSize) -> CGRect {
++    let side = min(canvas.width, canvas.height)
++    return CGRect(x: 0, y: (canvas.height - side) / 2, width: side, height: side)
++  }
++
++  private func draw(
++    _ frame: CGImage,
++    in context: CGContext,
++    canvas: CGSize,
++    backdrop: CGImage?,
++    mask: CGImage?
++  ) {
 +    let bounds = CGRect(origin: .zero, size: canvas)
-+    context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
-+    context.fill(bounds)
 +    context.interpolationQuality = .high
 +    guard ratio == .tall, let backdrop else {
++      context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
++      context.fill(bounds)
 +      context.draw(frame, in: bounds)
 +      return
 +    }
-+    // The cover keeps its square shape over a blurred copy of itself, so the
-+    // tall canvas is filled without stretching the artwork.
-+    context.draw(backdrop, in: Self.aspectFill(CGSize(width: backdrop.width, height: backdrop.height), in: bounds))
-+    let side = min(canvas.width, canvas.height)
-+    let art = CGRect(x: 0, y: (canvas.height - side) / 2, width: side, height: side)
-+    Self.drawFeathered(frame, in: context, rect: art)
++    let art = Self.artRect(in: canvas)
++    guard let mask else {
++      // Only when the mask could not be built: the feather is the point of
++      // the composition, but a cover without it still reads.
++      context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
++      context.fill(bounds)
++      context.draw(backdrop, in: bounds)
++      context.draw(frame, in: art)
++      return
++    }
++    // Composed in this one context with nothing allocated per frame: the
++    // cover in the art square, its alpha trimmed by the mask, the backdrop
++    // slipped underneath — which lands on backdrop * (1 - mask) + cover *
++    // mask, the feathered edges melting into the blur. The backdrop is
++    // already sized to the canvas, so every draw here is a blit.
++    context.clear(bounds)
++    context.draw(frame, in: art)
++    context.setBlendMode(.destinationIn)
++    context.draw(mask, in: art)
++    context.setBlendMode(.destinationOver)
++    context.draw(backdrop, in: bounds)
++    context.setBlendMode(.normal)
 +  }
 +
-+  /// Draws the cover with its top and bottom edges faded out, so it melts
-+  /// into the blurred backdrop instead of ending in a hard rectangle.
-+  private static func drawFeathered(_ frame: CGImage, in context: CGContext, rect: CGRect) {
-+    let width = Int(rect.width)
-+    let height = Int(rect.height)
-+    guard width > 4, height > 4,
-+          let offscreen = CGContext(
++  /// The backdrop at canvas size, aspect-filled: scaled once per clip here,
++  /// rather than a high-quality scale per frame of the encode.
++  private static func sized(_ image: CGImage, to canvas: CGSize) -> CGImage? {
++    let width = Int(canvas.width)
++    let height = Int(canvas.height)
++    guard width > 0, height > 0,
++          let context = CGContext(
 +            data: nil,
 +            width: width,
 +            height: height,
 +            bitsPerComponent: 8,
 +            bytesPerRow: 0,
-+            space: CGColorSpaceCreateDeviceRGB(),
++            space: deviceRGB,
 +            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
 +          )
 +    else {
-+      context.draw(frame, in: rect)
-+      return
++      return nil
 +    }
-+    offscreen.interpolationQuality = .high
-+    offscreen.draw(frame, in: CGRect(x: 0, y: 0, width: rect.width, height: rect.height))
++    context.interpolationQuality = .high
++    context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
++    context.fill(CGRect(x: 0, y: 0, width: canvas.width, height: canvas.height))
++    let source = CGSize(width: image.width, height: image.height)
++    context.draw(image, in: aspectFill(source, in: CGRect(origin: .zero, size: canvas)))
++    return context.makeImage()
++  }
++
++  /// The feather itself: white, transparent at both edges and solid through
++  /// the middle — the same gradient `drawFeathered` used to build on every
++  /// single frame, now built once per clip.
++  private static func featherMask(size: CGSize) -> CGImage? {
++    let width = Int(size.width)
++    let height = Int(size.height)
++    guard width > 4, height > 4,
++          let context = CGContext(
++            data: nil,
++            width: width,
++            height: height,
++            bitsPerComponent: 8,
++            bytesPerRow: 0,
++            space: deviceRGB,
++            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
++          )
++    else {
++      return nil
++    }
 +    let colors = [
 +      UIColor.white.withAlphaComponent(0).cgColor,
 +      UIColor.white.cgColor,
 +      UIColor.white.cgColor,
 +      UIColor.white.withAlphaComponent(0).cgColor,
 +    ] as CFArray
-+    let featherLocations: [CGFloat] = [0, 0.16, 0.84, 1]
-+    if let gradient = CGGradient(
-+      colorsSpace: CGColorSpaceCreateDeviceRGB(),
-+      colors: colors,
-+      locations: featherLocations
-+    ) {
-+      offscreen.setBlendMode(.destinationIn)
-+      offscreen.drawLinearGradient(
-+        gradient,
-+        start: CGPoint(x: 0, y: 0),
-+        end: CGPoint(x: 0, y: rect.height),
-+        options: []
-+      )
-+      offscreen.setBlendMode(.normal)
++    let locations: [CGFloat] = [0, 0.16, 0.84, 1]
++    guard let gradient = CGGradient(colorsSpace: deviceRGB, colors: colors, locations: locations) else {
++      return nil
 +    }
-+    guard let feathered = offscreen.makeImage() else {
-+      context.draw(frame, in: rect)
-+      return
-+    }
-+    context.draw(feathered, in: rect)
++    context.drawLinearGradient(
++      gradient,
++      start: CGPoint(x: 0, y: 0),
++      end: CGPoint(x: 0, y: size.height),
++      options: []
++    )
++    return context.makeImage()
 +  }
 +
 +  private static func blurred(_ frame: CGImage) -> CGImage? {
@@ -1852,14 +2369,39 @@ index 0000000..fbc89d8
 +
 +  private func encodeTaskValue() -> Task<URL?, Never> {
 +    lock.lock()
-+    defer { lock.unlock() }
 +    if let encodeTask {
++      lock.unlock()
 +      return encodeTask
 +    }
-+    let created = Task.detached(priority: .utility) {
++    lock.unlock()
++    // One task per destination across instances: a second instance holding
++    // the same clip joins the encode already running rather than starting a
++    // rival writer at the same path.
++    Self.sharedTaskLock.lock()
++    if let shared = Self.sharedTasks[destination.path] {
++      Self.sharedTaskLock.unlock()
++      lock.lock()
++      encodeTask = shared
++      lock.unlock()
++      return shared
++    }
++    // `.userInitiated`: the lock screen is waiting on this file, often with
++    // the phone locked, where `.utility` would crawl.
++    let created = Task.detached(priority: .userInitiated) {
 +      await self.encode()
 +    }
++    Self.sharedTasks[destination.path] = created
++    Self.sharedTaskLock.unlock()
++    lock.lock()
 +    encodeTask = created
++    lock.unlock()
++    let path = destination.path
++    Task {
++      _ = await created.value
++      Self.sharedTaskLock.lock()
++      Self.sharedTasks.removeValue(forKey: path)
++      Self.sharedTaskLock.unlock()
++    }
 +    return created
 +  }
 +
@@ -1946,16 +2488,25 @@ index 0000000..fbc89d8
 +      }
 +    }
 +
++    // Both composed once per clip: the blurred backdrop scaled to the canvas
++    // (every frame then draws it as a blit, with no aspect-fill math and no
++    // high-quality scale per frame), and the feather mask that trims the
++    // cover's top and bottom edges.
 +    let backdrop: CGImage?
-+    if ratio == .tall, let first = CGImageSourceCreateImageAtIndex(source, 0, Self.frameOptions) {
-+      backdrop = Self.blurred(first)
++    let mask: CGImage?
++    if ratio == .tall,
++       let first = CGImageSourceCreateImageAtIndex(source, 0, Self.frameOptions),
++       let blurred = Self.blurred(first) {
++      backdrop = Self.sized(blurred, to: canvas)
++      mask = Self.featherMask(size: Self.artRect(in: canvas).size)
 +    } else {
 +      backdrop = nil
++      mask = nil
 +    }
 +
 +    for sample in schedule.samples {
 +      guard let frame = CGImageSourceCreateImageAtIndex(source, sample.index, Self.frameOptions),
-+            let buffer = pixelBuffer(adaptor: adaptor, frame: frame, canvas: canvas, backdrop: backdrop),
++            let buffer = pixelBuffer(adaptor: adaptor, frame: frame, canvas: canvas, backdrop: backdrop, mask: mask),
 +            await isReady(input, writer: writer),
 +            adaptor.append(buffer, withPresentationTime: CMTime(seconds: sample.time, preferredTimescale: 600))
 +      else {
@@ -1965,7 +2516,7 @@ index 0000000..fbc89d8
 +
 +    guard let lastIndex = schedule.samples.last?.index,
 +          let lastFrame = CGImageSourceCreateImageAtIndex(source, lastIndex, Self.frameOptions),
-+          let lastBuffer = pixelBuffer(adaptor: adaptor, frame: lastFrame, canvas: canvas, backdrop: backdrop),
++          let lastBuffer = pixelBuffer(adaptor: adaptor, frame: lastFrame, canvas: canvas, backdrop: backdrop, mask: mask),
 +          await isReady(input, writer: writer)
 +    else {
 +      return nil
@@ -2006,7 +2557,8 @@ index 0000000..fbc89d8
 +    adaptor: AVAssetWriterInputPixelBufferAdaptor,
 +    frame: CGImage,
 +    canvas: CGSize,
-+    backdrop: CGImage?
++    backdrop: CGImage?,
++    mask: CGImage?
 +  ) -> CVPixelBuffer? {
 +    guard let pool = adaptor.pixelBufferPool else {
 +      return nil
@@ -2025,12 +2577,12 @@ index 0000000..fbc89d8
 +      height: Int(canvas.height),
 +      bitsPerComponent: 8,
 +      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-+      space: CGColorSpaceCreateDeviceRGB(),
++      space: Self.deviceRGB,
 +      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
 +    ) else {
 +      return nil
 +    }
-+    draw(frame, in: context, canvas: canvas, backdrop: backdrop)
++    draw(frame, in: context, canvas: canvas, backdrop: backdrop, mask: mask)
 +    return buffer
 +  }
 +
@@ -2124,11 +2676,146 @@ index 0000000..fbc89d8
 +}
 +
 +#endif
+diff --git a/ios/ArtworkPreloader.swift b/ios/ArtworkPreloader.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f23f0177668f354b005580174b2a30bde0ccbfa
+--- /dev/null
++++ b/ios/ArtworkPreloader.swift
+@@ -0,0 +1,103 @@
++import Foundation
++
++/// The lock screen's cover, fetched ahead of the track it belongs to: a
++/// download, and an encode behind it when the cover is animated, both better
++/// spent while the previous track still plays. `AudioPlayer.setNextSource`
++/// warms the track queued behind the current one — the same idea as Android's
++/// `PreloadingBitmapLoader` — and `MediaController.loadArtworkFromURL` asks
++/// here first, so a cover is fetched once for every caller that wants it, and
++/// the second ask of one has nothing left to wait for.
++final class ArtworkPreloader {
++  static let shared = ArtworkPreloader()
++
++  /// A cover, fetched: its bytes, and the clips cut from them for the lock
++  /// screen (nil when the cover does not animate, or the system is too old
++  /// to play an animated one).
++  struct Ready {
++    let data: Data
++    let square: AnyObject?
++    let tall: AnyObject?
++  }
++
++  private let lock = NSLock()
++  /// What was fetched, last write last, bounded by `limit`: a cover's bytes
++  /// run to a few megabytes when it animates, so only the handful that a skip
++  /// or a media reset asks for again is worth keeping.
++  private var stored: [URL: Ready] = [:]
++  private var order: [URL] = []
++  private var waiters: [URL: [(Ready?) -> Void]] = [:]
++  private var inflight: Set<URL> = []
++  private let delivery = DispatchQueue(label: "expo.modules.audio.artwork-preloader")
++  private let limit = 6
++
++  /// Nothing wants an answer: the point is only to have the cover later.
++  func warm(_ url: URL?) {
++    guard let url else { return }
++    fetch(url) { _ in }
++  }
++
++  /// The cover for `url`: here already, or on its way, or the fetch this call
++  /// starts. `completion` runs off the main thread, as the URL session's queue
++  /// did before it — the caller hops after it.
++  func fetch(_ url: URL, completion: @escaping (Ready?) -> Void) {
++    lock.lock()
++    if let ready = stored[url] {
++      lock.unlock()
++      delivery.async { completion(ready) }
++      return
++    }
++    waiters[url, default: []].append(completion)
++    if inflight.contains(url) {
++      lock.unlock()
++      return
++    }
++    inflight.insert(url)
++    lock.unlock()
++    start(url)
++  }
++
++  private func start(_ url: URL) {
++    URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
++      guard let self else { return }
++      guard let data, error == nil else {
++        self.done(url, nil)
++        return
++      }
++      var square: AnyObject?
++      var tall: AnyObject?
++#if compiler(>=6.2)
++      if #available(iOS 26.0, tvOS 26.0, *) {
++        let clips = AnimatedArtwork.make(url: url, data: data)
++        square = clips.square
++        tall = clips.tall
++        // The encode starts now, while the track these clips belong to is
++        // still the next one: the file it writes is the lock screen's own
++        // cache, so a clip that lands before the move is there the moment
++        // the system asks for it.
++        (square as? AnimatedArtwork)?.whenReady {}
++        (tall as? AnimatedArtwork)?.whenReady {}
++      }
++#endif
++      self.done(url, Ready(data: data, square: square, tall: tall))
++    }.resume()
++  }
++
++  private func done(_ url: URL, _ ready: Ready?) {
++    lock.lock()
++    inflight.remove(url)
++    let pending = waiters.removeValue(forKey: url) ?? []
++    if let ready {
++      stored[url] = ready
++      order.removeAll { $0 == url }
++      order.append(url)
++      while order.count > limit, let oldest = order.first {
++        order.removeFirst()
++        stored.removeValue(forKey: oldest)
++      }
++    }
++    lock.unlock()
++    delivery.async {
++      pending.forEach { $0(ready) }
++    }
++  }
++}
 diff --git a/ios/AudioModule.swift b/ios/AudioModule.swift
-index d265606..7cf6446 100644
+index d26560627c2dfa97370440ad28304617f3f9f0f7..59dd6edd368dddec03162acca38a474371c28ca6 100644
 --- a/ios/AudioModule.swift
 +++ b/ios/AudioModule.swift
-@@ -241,6 +241,18 @@ public class AudioModule: Module {
+@@ -32,6 +32,25 @@ public class AudioModule: Module {
+       try setAudioMode(mode: mode)
+     }
+ 
++    /// The lock screen's cover for `url`, fetched and its clip encoded with no
++    /// track attached to it: how the queue ahead is warmed, covers of tracks
++    /// the player has not been pointed at yet. (`setNextSource` warms the one
++    /// queued behind the current, `replaceCurrentSource` the one loading.)
++    Function("warmArtwork") { (urlString: String?) in
++      guard let urlString, let url = URL(string: urlString) else {
++        return
++      }
++      ArtworkPreloader.shared.warm(url)
++    }
++
++    /// The fps the covers encode at from here on - the app's Settings menu
++    /// writes it (30 by default, 60 on request).
++    Function("setArtworkFps") { (fps: Double) in
++      if #available(iOS 26.0, tvOS 26.0, *) {
++        AnimatedArtwork.maxPlaybackRate = fps
++      }
++    }
++
+     AsyncFunction("setIsAudioActiveAsync") { (isActive: Bool)  in
+       try setIsAudioActive(isActive)
+     }
+@@ -241,6 +260,18 @@ public class AudioModule: Module {
          }
        }
  
@@ -2148,7 +2835,7 @@ index d265606..7cf6446 100644
          player.ref.pause()
          if !player.keepAudioSessionActive {
 diff --git a/ios/AudioPlayer.swift b/ios/AudioPlayer.swift
-index 0742943..818eb0e 100644
+index 074294321e872bb53c0b2d41044dac3c612f14f0..c3f06ed799a991d94e9cd2516ed9b80f57f3159b 100644
 --- a/ios/AudioPlayer.swift
 +++ b/ios/AudioPlayer.swift
 @@ -4,6 +4,7 @@ import Combine
@@ -2286,7 +2973,18 @@ index 0742943..818eb0e 100644
          if self.isLooping {
            self.enqueueNextLoopItem()
            self.addPlaybackEndNotification()
-@@ -319,6 +380,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -262,6 +323,10 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+ 
+   func replaceCurrentSource(source: AudioSource) {
+     self.source = source
++    // Its cover too: the lock screen asks the moment a source lands, and a
++    // track loaded by hand never passed through the warm `setNextSource` does
++    // — a tap in a list, a crossfade's reserve player, a resume from pause.
++    ArtworkPreloader.shared.warm(source.metadata?.artworkUrl)
+     let wasPlaying = ref.timeControlStatus == .playing
+     let wasSamplingEnabled = samplingEnabled
+     removeQueuedLoopItems()
+@@ -319,6 +384,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
    }
  
    private func teardownPlayer() {
@@ -2294,7 +2992,7 @@ index 0742943..818eb0e 100644
      removeQueuedLoopItems()
      if samplingEnabled {
        uninstallTap()
-@@ -346,7 +408,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -346,7 +412,7 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
  
    private func restorePlaybackState(time: Double, shouldResume: Bool, rate: Float) {
      let cmTime = CMTime(seconds: time, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
@@ -2303,7 +3001,7 @@ index 0742943..818eb0e 100644
        guard let self, shouldResume else { return }
        self.play(at: rate)
      }
-@@ -405,6 +467,11 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -405,6 +471,11 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
    }
  
    private func replacePlayerItem(with item: AVPlayerItem?) {
@@ -2315,7 +3013,7 @@ index 0742943..818eb0e 100644
      if let queuePlayer = ref as? AVQueuePlayer {
        queuePlayer.removeAllItems()
        if let item {
-@@ -429,12 +496,60 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -429,12 +500,67 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
      queuePlayer.insert(nextItem, after: currentItem)
    }
  
@@ -2349,6 +3047,13 @@ index 0742943..818eb0e 100644
 +    gaplessItem = item
 +    gaplessSource = source
 +    ref.actionAtItemEnd = endAction
++    // Its cover too, so the lock screen has it the moment the track starts:
++    // a download, and an encode behind it when the cover animates, both
++    // better spent now — while the track it belongs to is still the NEXT
++    // one — than in the first seconds of the track itself. `MediaController`
++    // reads what was fetched from the preloader, the same idea as Android's
++    // `PreloadingBitmapLoader` (#139).
++    ArtworkPreloader.shared.warm(source.metadata?.artworkUrl)
 +  }
 +
 +  /** Drops the track queued behind the current one, if any. */
@@ -2377,7 +3082,7 @@ index 0742943..818eb0e 100644
        queuePlayer.remove(item)
      }
    }
-@@ -459,7 +574,21 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
+@@ -459,7 +585,21 @@ public class AudioPlayer: SharedRef<AVPlayer>, Playable {
          return
        }
  
@@ -2400,7 +3105,7 @@ index 0742943..818eb0e 100644
          self.updateStatus(with: [
            "playing": false,
 diff --git a/ios/AudioRecords.swift b/ios/AudioRecords.swift
-index 33db27c..a5c4135 100644
+index 33db27c3b8fb40fa9db6659a0787c6b2b503d1ab..ae00508e44a1632dafe1bedc2d326c31acc2a45c 100644
 --- a/ios/AudioRecords.swift
 +++ b/ios/AudioRecords.swift
 @@ -64,12 +64,17 @@ struct Metadata: Record {
@@ -2421,11 +3126,29 @@ index 33db27c..a5c4135 100644
  }
  
  enum BitRateStrategy: String, Enumerable {
+diff --git a/ios/AudioSource.swift b/ios/AudioSource.swift
+index 0c8c2fede4b079f6d71217bafe07b5de55438821..9870ce6b1e038ab701591c7bebead6b95db80dd4 100644
+--- a/ios/AudioSource.swift
++++ b/ios/AudioSource.swift
+@@ -10,4 +10,13 @@ struct AudioSource: Record {
+ 
+   @Field
+   var name: String?
++
++  @Field
++  var preferPreciseTiming: Bool?
++
++  @Field
++  // The cover travels with the track so it can be fetched while the previous
++  // one is still playing (`setNextSource` warms it, `ArtworkPreloader` keeps
++  // it) — the lock screen then has it the moment this track starts.
++  var metadata: Metadata?
+ }
 diff --git a/ios/AudioUtils.swift b/ios/AudioUtils.swift
-index 79c7c0b..7c4800e 100644
+index 79c7c0b256581a768c42a0291bf84bdff4c4b142..ca13e59c53a7f9a3a5fc49d94b266c621201983a 100644
 --- a/ios/AudioUtils.swift
 +++ b/ios/AudioUtils.swift
-@@ -84,9 +84,17 @@ struct AudioUtils {
+@@ -84,9 +84,23 @@ struct AudioUtils {
        url
      }
  
@@ -2438,7 +3161,13 @@ index 79c7c0b..7c4800e 100644
 +    // AVFoundation resolve the exact frame instead, and a container that
 +    // already carries an index (m4a/mp4) reports the same precise timing
 +    // anyway, so it costs nothing there.
-+    var options: [String: Any] = [AVURLAssetPreferPreciseDurationAndTimingKey: true]
++    //
++    // `preferPreciseTiming: false` opts a source out of all that: a preview only
++    // has to land *near* where it jumped, and on a streamed mp3 the exact seek
++    // means scanning the file for an index before the first second plays.
++    var options: [String: Any] = [
++      AVURLAssetPreferPreciseDurationAndTimingKey: source.preferPreciseTiming ?? true
++    ]
      if let headers = source.headers {
 -      options = ["AVURLAssetHTTPHeaderFieldsKey": headers]
 +      options["AVURLAssetHTTPHeaderFieldsKey"] = headers
@@ -2446,7 +3175,7 @@ index 79c7c0b..7c4800e 100644
  
      let asset = AVURLAsset(url: finalUrl, options: options)
 diff --git a/ios/MediaController.swift b/ios/MediaController.swift
-index e977f57..8d8068b 100644
+index e977f577cd2e16b194b56537ad76b423f40d2496..4f16e709309c0a9f8b690232ae23d8067cdb1cda 100644
 --- a/ios/MediaController.swift
 +++ b/ios/MediaController.swift
 @@ -11,9 +11,12 @@ class MediaController {
@@ -2470,7 +3199,20 @@ index e977f57..8d8068b 100644
        applyAssetMetadata(&nowPlayingInfo, for: player)
      }
  
-@@ -80,7 +84,11 @@ class MediaController {
+@@ -72,7 +76,12 @@ class MediaController {
+     }
+ 
+     nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
++    // The state itself, alongside the rate above: what tells the system this
++    // is playback in progress rather than metadata sitting idle.
++    if #available(iOS 13.0, *) {
++      nowPlayingInfoCenter.playbackState = player.isPlaying ? .playing : .paused
++    }
+   }
+ 
+   private func applyPlaybackInfo(_ info: inout [String: Any], for player: AudioPlayer) {
+     if isLiveStream {
+@@ -80,7 +89,11 @@ class MediaController {
        info.removeValue(forKey: MPMediaItemPropertyPlaybackDuration)
        info.removeValue(forKey: MPNowPlayingInfoPropertyElapsedPlaybackTime)
      } else {
@@ -2483,7 +3225,7 @@ index e977f57..8d8068b 100644
        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
      }
      info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? player.ref.rate : 0.0
-@@ -139,17 +147,21 @@ class MediaController {
+@@ -139,17 +152,21 @@ class MediaController {
      guard let artworkUrl = metadata.artworkUrl else {
        resetArtworkState()
        info.removeValue(forKey: MPMediaItemPropertyArtwork)
@@ -2505,7 +3247,7 @@ index e977f57..8d8068b 100644
        return
      }
  
-@@ -173,14 +185,17 @@ class MediaController {
+@@ -173,16 +190,67 @@ class MediaController {
          return
        }
  
@@ -2524,9 +3266,70 @@ index e977f57..8d8068b 100644
 +      latestNowPlayingInfo[MPMediaItemPropertyArtwork] = still
 +      self.applyAnimatedArtwork(&latestNowPlayingInfo)
        self.nowPlayingInfoCenter.nowPlayingInfo = latestNowPlayingInfo
++
++      // A clip that was still encoding goes up as soon as it is on disk. The
++      // keys are only ever handed over with a file the system can open at
++      // once: its request comes with the artwork itself, and one answered
++      // after the wait left the lock screen on the preview frame for good —
++      // skipping on and back, which loads it all over again, was the only
++      // way out of it.
++      self.publishAnimatedWhenReady(artwork.square, url: artworkUrl, player: player, item: currentItemIdentifier)
++      self.publishAnimatedWhenReady(artwork.tall, url: artworkUrl, player: player, item: currentItemIdentifier)
++    }
++  }
++
++  /**
++   * Publishes the animated artwork keys once `clip` is on disk, and only if
++   * this is still the artwork on screen. Every variant is written each time
++   * (`applyAnimatedArtwork` skips the ones not ready), so the last clip to
++   * finish carries both keys up together.
++   */
++  private func publishAnimatedWhenReady(
++    _ clip: AnyObject?,
++    url: URL,
++    player: AudioPlayer,
++    item: ObjectIdentifier?
++  ) {
++#if compiler(>=6.2)
++    if #available(iOS 26.0, tvOS 26.0, *) {
++      guard let clip = clip as? AnimatedArtwork else {
++        return
++      }
++      clip.whenReady { [weak self] in
++        guard let self else {
++          return
++        }
++        self.performOnMain {
++          guard self.cachedAnimatedSquareArtwork === clip || self.cachedAnimatedTallArtwork === clip,
++                self.currentArtworkUrl == url,
++                self.currentArtworkItemIdentifier == item,
++                self.activePlayer?.id == player.id
++          else {
++            return
++          }
++
++          var latestNowPlayingInfo = self.nowPlayingInfoCenter.nowPlayingInfo ?? [String: Any]()
++          self.applyAnimatedArtwork(&latestNowPlayingInfo)
++          self.nowPlayingInfoCenter.nowPlayingInfo = latestNowPlayingInfo
++        }
++      }
      }
++#endif
    }
-@@ -204,34 +219,96 @@ class MediaController {
+ 
+   private func clearNowPlayingInfoOnMain() {
+@@ -188,7 +256,10 @@ class MediaController {
+   private func clearNowPlayingInfoOnMain() {
+     nowPlayingInfoCenter.nowPlayingInfo = nil
++    if #available(iOS 13.0, *) {
++      nowPlayingInfoCenter.playbackState = .stopped
++    }
+     activePlayer = nil
+     isLiveStream = false
+     resetArtworkState()
+     currentArtworkItemIdentifier = nil
+   }
+@@ -204,34 +275,120 @@ class MediaController {
    private func resetArtworkState() {
      currentArtworkUrl = nil
      cachedArtwork = nil
@@ -2536,23 +3339,28 @@ index e977f57..8d8068b 100644
    }
  
 -  private func loadArtworkFromURL(url: URL, completion: @escaping (MPMediaItemArtwork?) -> Void) {
+-    URLSession.shared.dataTask(with: url) { data, _, error in
+-      if error != nil {
+-        self.performOnMain {
+-          completion(nil)
+-        }
+-        return
+-      }
 +  private struct LoadedArtwork {
 +    let still: MPMediaItemArtwork?
 +    let square: AnyObject?
 +    let tall: AnyObject?
 +  }
-+
-+  private func loadArtworkFromURL(url: URL, completion: @escaping (LoadedArtwork) -> Void) {
-     URLSession.shared.dataTask(with: url) { data, _, error in
-       if error != nil {
-         self.performOnMain {
--          completion(nil)
-+          completion(LoadedArtwork(still: nil, square: nil, tall: nil))
-         }
-         return
-       }
  
-       guard let data, let image = UIImage(data: data) else {
+-      guard let data, let image = UIImage(data: data) else {
++  private func loadArtworkFromURL(url: URL, completion: @escaping (LoadedArtwork) -> Void) {
++    // Through the preloader, which `setNextSource` warms while the track it
++    // belongs to is still the NEXT one: the bytes, and the clip's encode
++    // behind them, are usually done before the lock screen asks, and a cover
++    // it has never seen is fetched once for every caller that wants it,
++    // instead of once each.
++    ArtworkPreloader.shared.fetch(url) { ready in
++      guard let ready, let image = UIImage(data: ready.data) else {
          self.performOnMain {
 -          completion(nil)
 +          completion(LoadedArtwork(still: nil, square: nil, tall: nil))
@@ -2561,48 +3369,47 @@ index e977f57..8d8068b 100644
        }
  
 -      let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-+      let still = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-+      let square: AnyObject?
-+      let tall: AnyObject?
-+#if compiler(>=6.2)
-+      if #available(iOS 26.0, tvOS 26.0, *) {
-+        let artwork = AnimatedArtwork.make(url: url, data: data)
-+        square = artwork.square
-+        tall = artwork.tall
-+      } else {
-+        square = nil
-+        tall = nil
++      // The request carries the size the surface wants: a square one (the
++      // Dynamic Island's compact artwork) gets the cover's centered square,
++      // while a taller one keeps the whole tall picture — which is what the
++      // full-screen lock screen draws.
++      let square = Self.centeredSquarePreview(of: image)
++      let still = MPMediaItemArtwork(boundsSize: image.size) { requested in
++        if let square, Self.isSquare(requested) {
++          return square
++        }
++        return image
 +      }
-+#else
-+      square = nil
-+      tall = nil
-+#endif
        self.performOnMain {
 -        completion(artwork)
-+        completion(LoadedArtwork(still: still, square: square, tall: tall))
-       }
-     }
-     .resume()
-   }
- 
++        completion(LoadedArtwork(still: still, square: ready.square, tall: ready.tall))
++      }
++    }
++  }
++
 +  // Both variants are published: the system drops the key it does not support
 +  // on its own, and gating on `supportedAnimatedArtworkKeys` is what kept the
 +  // lock screen on the static artwork — the tall 3:4 variant is the one the
 +  // iPhone lock screen draws full screen.
++  //
++  // Only with the clip on disk (`isOnDisk`): the system's request arrives with
++  // the key, and one that then waits for the encoder leaves the lock screen
++  // on the preview frame while the cover stands ready behind it.
 +  private func applyAnimatedArtwork(_ info: inout [String: Any]) {
 +#if compiler(>=6.2)
 +    if #available(iOS 26.0, tvOS 26.0, *) {
-+      if let artwork = cachedAnimatedSquareArtwork as? MPMediaItemAnimatedArtwork {
-+        info[MPNowPlayingInfoProperty1x1AnimatedArtwork] = artwork
++      if let clip = cachedAnimatedSquareArtwork as? AnimatedArtwork, let item = clip.item, clip.isOnDisk {
++        info[MPNowPlayingInfoProperty1x1AnimatedArtwork] = item
 +      } else {
 +        info.removeValue(forKey: MPNowPlayingInfoProperty1x1AnimatedArtwork)
 +      }
-+      if let artwork = cachedAnimatedTallArtwork as? MPMediaItemAnimatedArtwork {
-+        info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = artwork
++      if let clip = cachedAnimatedTallArtwork as? AnimatedArtwork, let item = clip.item, clip.isOnDisk {
++        info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = item
 +      } else {
 +        info.removeValue(forKey: MPNowPlayingInfoProperty3x4AnimatedArtwork)
-+      }
-+    }
+       }
+     }
+-    .resume()
 +#endif
 +  }
 +
@@ -2613,8 +3420,36 @@ index e977f57..8d8068b 100644
 +      info.removeValue(forKey: MPNowPlayingInfoProperty3x4AnimatedArtwork)
 +    }
 +#endif
+   }
++
++  // Whether a requested artwork size reads as a square: what the Dynamic
++  // Island's compact artwork asks for, as opposed to the tall sizes the
++  // full-screen lock screen asks for.
++  private static func isSquare(_ size: CGSize) -> Bool {
++    guard size.width > 0, size.height > 0 else {
++      return false
++    }
++    let difference = (size.width - size.height).magnitude
++    return difference <= max(size.width, size.height) * 0.1
 +  }
 +
++  // The cover's centered square, for the surfaces that ask square — and only
++  // when the cover is meaningfully tall. A square cover comes back untouched,
++  // so nothing about it changes anywhere.
++  private static func centeredSquarePreview(of image: UIImage) -> UIImage? {
++    let width = image.size.width
++    let height = image.size.height
++    guard width > 0, height > width * 1.05 else {
++      return nil
++    }
++    let side = min(width, height)
++    let format = UIGraphicsImageRendererFormat()
++    format.scale = image.scale
++    return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
++      image.draw(at: CGPoint(x: (side - width) / 2, y: (side - height) / 2))
++    }
++  }
+ 
    private func enableRemoteCommands(options: LockScreenOptions?) {
 +    updateRemoteCommandAvailability(options: options)
 +
@@ -2628,7 +3463,7 @@ index e977f57..8d8068b 100644
      remoteCommandCenter.playCommand.addTarget { [weak self] _ in
        guard let player = self?.activePlayer else {
          return .commandFailed
-@@ -270,7 +347,7 @@ class MediaController {
+@@ -270,7 +427,7 @@ class MediaController {
        }
  
        let seekTime = CMTime(seconds: event.positionTime, preferredTimescale: 1)
@@ -2637,7 +3472,7 @@ index e977f57..8d8068b 100644
  
        return .success
      }
-@@ -303,12 +380,34 @@ class MediaController {
+@@ -303,12 +460,34 @@ class MediaController {
        return .success
      }
  
@@ -2672,7 +3507,7 @@ index e977f57..8d8068b 100644
    }
  
    private func disableRemoteCommands() {
-@@ -318,6 +417,8 @@ class MediaController {
+@@ -318,6 +497,8 @@ class MediaController {
      remoteCommandCenter.changePlaybackPositionCommand.isEnabled = false
      remoteCommandCenter.skipForwardCommand.isEnabled = false
      remoteCommandCenter.skipBackwardCommand.isEnabled = false

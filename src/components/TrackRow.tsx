@@ -25,6 +25,7 @@ import { useT } from '@/i18n';
 import { colors, fontSize, spacing, themed, useTheme } from '@/theme';
 import { Cover, useCoverRadius } from './Cover';
 import { usePressFeedback } from '@/hooks/usePressFeedback';
+import { bump } from '@/lib/perfLog';
 import { PlayingBars } from './PlayingBars';
 import { ExplicitBadge, useExplicitBadge } from './ExplicitBadge';
 import { FavoriteButton } from './FavoriteButton';
@@ -119,6 +120,7 @@ function TrackRowBase({
   onPress,
   onPressIn,
 }: Props) {
+  bump('render · TrackRow');
   const openMenu = useSongMenu((s) => s.open);
   const t = useT();
   const press = usePressFeedback();
@@ -203,39 +205,7 @@ function TrackRowBase({
     }
   }
 
-  return (
-    <ReanimatedSwipeable
-      ref={swipeRef}
-      // The left strip is opened by swiping RIGHT (and vice versa).
-      renderLeftActions={(progress) =>
-        swipeAction === 'off' ? null : (
-          <SwipeActionPanel progress={progress} icon={SWIPE_ICON[swipeAction]} side="left" />
-        )
-      }
-      renderRightActions={(progress) =>
-        swipeLeftAction === 'off' ? null : (
-          <SwipeActionPanel progress={progress} icon={SWIPE_ICON[swipeLeftAction]} side="right" />
-        )
-      }
-      // Intentionally less sensitive: `dragOffsetFrom…Edge` requires a clear
-      // horizontal path before activating (so a vertical scroll with some
-      // lateral movement no longer triggers it accidentally), and the
-      // `threshold` requires a substantial drag to confirm the action.
-      dragOffsetFromLeftEdge={30}
-      dragOffsetFromRightEdge={30}
-      leftThreshold={90}
-      rightThreshold={90}
-      friction={1}
-      overshootLeft={false}
-      overshootRight={false}
-      enabled={swipeable && !selecting && !unavailable && (swipeAction !== 'off' || swipeLeftAction !== 'off')}
-      onSwipeableWillOpen={(direction) => {
-        // `direction` is the GESTURE direction (not the panel side):
-        // swiping right (opens the left strip) arrives as RIGHT.
-        if (direction === SwipeDirection.RIGHT) runSwipeAction(swipeAction);
-        else if (direction === SwipeDirection.LEFT) runSwipeAction(swipeLeftAction);
-      }}
-    >
+  const row = (
     <AnimatedPressable
       // The row dims late rather than not at all: it used to light up on the
       // way past while somebody scrolled, which read as taps nobody made, so
@@ -244,8 +214,9 @@ function TrackRowBase({
       //
       // Not downloaded: dimmed and with warning on tap OUTSIDE selection; inside
       // selection it behaves normally (long-press enters, tap marks) so it can
-      // be added to a list even though it can't be played.
-      style={[styles.row, unavailable && !selecting && styles.dimmed, press.style]}
+      // be added to a list even though it can't be played. One or the other:
+      // the press style sets opacity too, and after `dimmed` it undid it.
+      style={[styles.row, unavailable && !selecting ? styles.dimmed : press.style]}
       onPressIn={() => {
         press.onPressIn();
         if (!(unavailable && !selecting)) onPressIn?.();
@@ -337,6 +308,47 @@ function TrackRowBase({
         </Pressable>
       ) : null}
     </AnimatedPressable>
+  );
+
+  // A row that never swipes skips the gesture wrapper altogether: it is a pan
+  // handler and a handful of animated values per row, and a shelf of thirty
+  // of them was enough to make Home stutter while music played.
+  if (!swipeable) return row;
+
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      // The left strip is opened by swiping RIGHT (and vice versa).
+      renderLeftActions={(progress) =>
+        swipeAction === 'off' ? null : (
+          <SwipeActionPanel progress={progress} icon={SWIPE_ICON[swipeAction]} side="left" />
+        )
+      }
+      renderRightActions={(progress) =>
+        swipeLeftAction === 'off' ? null : (
+          <SwipeActionPanel progress={progress} icon={SWIPE_ICON[swipeLeftAction]} side="right" />
+        )
+      }
+      // Intentionally less sensitive: `dragOffsetFrom…Edge` requires a clear
+      // horizontal path before activating (so a vertical scroll with some
+      // lateral movement no longer triggers it accidentally), and the
+      // `threshold` requires a substantial drag to confirm the action.
+      dragOffsetFromLeftEdge={30}
+      dragOffsetFromRightEdge={30}
+      leftThreshold={90}
+      rightThreshold={90}
+      friction={1}
+      overshootLeft={false}
+      overshootRight={false}
+      enabled={swipeable && !selecting && !unavailable && (swipeAction !== 'off' || swipeLeftAction !== 'off')}
+      onSwipeableWillOpen={(direction) => {
+        // `direction` is the GESTURE direction (not the panel side):
+        // swiping right (opens the left strip) arrives as RIGHT.
+        if (direction === SwipeDirection.RIGHT) runSwipeAction(swipeAction);
+        else if (direction === SwipeDirection.LEFT) runSwipeAction(swipeLeftAction);
+      }}
+    >
+      {row}
     </ReanimatedSwipeable>
   );
 }

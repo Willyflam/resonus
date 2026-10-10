@@ -39,6 +39,7 @@ import { Message } from '@/components/Message';
 import { OfflineIndicator } from '@/components/OfflineIndicator';
 import { PlaylistCard } from '@/components/PlaylistCard';
 import { PodcastEpisodeCard } from '@/components/PodcastEpisodeCard';
+import { RadioCard } from '@/components/RadioCard';
 import { TrackRow } from '@/components/TrackRow';
 import { useScreenBottomPadding } from '@/hooks/useScreenBottomPadding';
 import { columnsFor, useScreenSize } from '@/hooks/useScreenSize';
@@ -48,11 +49,13 @@ import { haptic } from '@/lib/haptics';
 import { listPerf } from '@/lib/listPerf';
 import { bump } from '@/lib/perfLog';
 import { playShuffle } from '@/lib/playShuffle';
+import { refreshRadios } from '@/lib/radioBuild';
 import { requestSearchFocus } from '@/lib/tabOrigin';
 import { useAuthStore } from '@/store/auth';
 import { checkAutoUrlNow } from '@/store/autoUrl';
 import { useLastPlayed } from '@/store/lastPlayed';
 import { usePlayerStore } from '@/store/player';
+import { useRadios } from '@/store/radios';
 import { useScanProgress } from '@/store/scanProgress';
 import {
   useSettings,
@@ -297,11 +300,18 @@ const MOST_PLAYED_SONGS = 30;
 const SONG_PAGE_SIZE = 3;
 
 /**
+ * How wide a page of songs gets. A row stops reading as one thing well before
+ * the width of a phone on its side, so past this the pages sit side by side.
+ */
+const SONG_PAGE_MAX = 420;
+
+/**
  * A horizontal carousel of small vertical song lists.
  *
  * Each page is a slightly narrower-than-screen card holding up to
  * SONG_PAGE_SIZE TrackRow items. Swiping reveals the next page peeking from
- * the right, inviting the user to scroll.
+ * the right, inviting the user to scroll. Virtualized: only the pages near the
+ * screen are mounted.
  */
 function SongListCarousel({
   songs,
@@ -318,25 +328,36 @@ function SongListCarousel({
   const playQueue = usePlayerStore((s) => s.playQueue);
   const showArtwork = useSettings((s) => s.showListArtwork);
 
-  const pageWidth = Math.round(screenWidth * 0.85);
+  const pageWidth = Math.min(Math.round(screenWidth * 0.85), SONG_PAGE_MAX);
   const gap = spacing.md;
   const pages: Song[][] = [];
   for (let i = 0; i < songs.length; i += SONG_PAGE_SIZE) {
     pages.push(songs.slice(i, i + SONG_PAGE_SIZE));
   }
+  // The visible pages and the one peeking in, so nothing pops in on mount.
+  const onScreen = Math.ceil(screenWidth / (pageWidth + gap)) + 1;
 
   return (
-    <ScrollView
+    <FlatList
       horizontal
-      pagingEnabled
+      data={pages}
+      keyExtractor={(_, pi) => String(pi)}
+      extraData={currentId}
+      initialNumToRender={onScreen}
+      maxToRenderPerBatch={onScreen}
+      windowSize={3}
+      getItemLayout={(_, pi) => ({
+        length: pageWidth + gap,
+        offset: spacing.lg + (pageWidth + gap) * pi,
+        index: pi,
+      })}
       decelerationRate="fast"
       snapToInterval={pageWidth + gap}
       snapToAlignment="start"
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.lg, gap }}
-    >
-      {pages.map((page, pi) => (
-        <View key={pi} style={[songListStyles.page, { width: pageWidth }]}>
+      contentContainerStyle={{ paddingHorizontal: spacing.lg }}
+      renderItem={({ item: page, index: pi }) => (
+        <View style={[songListStyles.page, { width: pageWidth, marginRight: gap }]}>
           {page.map((song, ri) => {
             const globalIndex = pi * SONG_PAGE_SIZE + ri;
             return (
@@ -356,8 +377,8 @@ function SongListCarousel({
             );
           })}
         </View>
-      ))}
-    </ScrollView>
+      )}
+    />
   );
 }
 
@@ -627,6 +648,62 @@ function DiscoverSection({ title, reshuffleKey }: { title: string; reshuffleKey:
   );
 }
 
+/**
+ * The personalised artist radios: built from this server's play counts and
+ * kept on the device. Pulling Home brings a new set, like it reshuffles the
+ * random shelves; left alone, they are replaced after a week.
+ *
+ * The query only reads what is saved (`refreshRadios` decides whether there
+ * is anything to build), so coming back to Home costs nothing. The shelf
+ * holds its place behind the skeleton during the first build, the way the
+ * artist index does four seconds in.
+ */
+function RadiosSection({ title, reshuffleKey }: { title: string; reshuffleKey: number }) {
+  const canFetch = useAuthStore((s) => !!s.auth || s.offline);
+  const card = useShelfCard();
+  const count = useSettings((s) => s.radioCount);
+  // Fewer asked for than are saved: the shelf shortens at once, without
+  // waiting on the rebuild Settings starts.
+  const defs = useRadios((s) => s.defs).slice(0, count);
+  const { isLoading } = useQuery({
+    queryKey: ['radios'],
+    queryFn: () => refreshRadios().catch(() => useRadios.getState().defs),
+    staleTime: 6 * 60 * 60 * 1000,
+    enabled: canFetch,
+  });
+
+  // Pulling Home brings new radios, like it reshuffles the random shelves.
+  // The ones on screen stay until the new set is ready, then swap whole.
+  useEffect(() => {
+    if (reshuffleKey > 0 && canFetch) void refreshRadios({ force: true }).catch(() => {});
+  }, [reshuffleKey, canFetch]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <AlbumCardsSkeleton horizontal />
+      </View>
+    );
+  }
+  if (defs.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <FlatList
+        {...listPerf}
+        horizontal
+        data={defs}
+        keyExtractor={(item) => item.seed.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rowContent}
+        renderItem={({ item }) => <RadioCard def={item} width={card} />}
+      />
+    </View>
+  );
+}
+
 /** Look and target of each chip; order and state are set by the user
  *  (Settings → Appearance → Home chips). Without `href` = plays instead of
  *  navigating (only the shuffle one). */
@@ -775,7 +852,13 @@ function ScanningPanel() {
 const HOME_ALBUM_CONFIG: Record<
   Exclude<
     HomeSectionKey,
-    'randomArtists' | 'discover' | 'playlists' | 'mostPlayedSongs' | 'randomSongs' | 'podcasts'
+    | 'randomArtists'
+    | 'discover'
+    | 'radios'
+    | 'playlists'
+    | 'mostPlayedSongs'
+    | 'randomSongs'
+    | 'podcasts'
   >,
   { title: string; type: 'newest' | 'recent' | 'frequent' | 'random' | 'byYear' }
 > = {
@@ -824,7 +907,9 @@ function HomeHeaderButton({ which }: { which: HomeButtonKey }) {
   const [href, icon, label] =
     which === 'history'
       ? (['/history', 'time-outline', 'History'] as const)
-      : (['/settings', 'settings-outline', 'Settings'] as const);
+      : which === 'queue'
+        ? (['/queue', 'layers-outline', 'Queue'] as const)
+        : (['/settings', 'settings-outline', 'Settings'] as const);
   return (
     <Link href={href} asChild>
       <Pressable hitSlop={10} accessibilityLabel={t(label)}>
@@ -860,6 +945,7 @@ export default function HomeScreen() {
   const customGreeting = useSettings((s) => s.customGreeting);
   const language = useSettings((s) => s.language);
   const homeSections = useSettings((s) => s.homeSections);
+  const radiosEnabled = useSettings((s) => s.radiosEnabled);
   useSettings((s) => s.appFont); // re-render when font changes
   // Four slots, and when each one starts comes from the language rather than
   // from here: at 6pm English is in the evening and Spanish is still in the
@@ -927,41 +1013,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.fixedHeader}>
-        <View style={styles.header}>
-          {/* `flexShrink` and `numberOfLines`: the greeting is customizable,
-              and although the setting caps it at GREETING_MAX, those characters
-              measure differently depending on the chosen font. Shrinking and
-              trimming, no text can push the buttons off-screen. */}
-          <View style={styles.headerLeft}>
-            {/* Nothing beside the greeting in the local profile. There used to
-                be a phone in the accent colour here, and it was the one thing
-                on the screen saying which profile you were in. That is the
-                trouble with it: the local profile is not a state you are
-                waiting to come out of, it is where somebody has chosen to be,
-                and a permanent badge for it is decoration. Offline is a
-                different matter and still says so, on the right. */}
-            {/* The screen's name when there is no greeting, where Explore and
-                Your library have theirs. */}
-            <Text style={styles.greeting} numberOfLines={1}>
-              {showGreeting ? greeting : t('Home')}
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            {/* Before the buttons, and dimmer than them, so it reads as a state
-                and not as something to press. */}
-            <OfflineIndicator />
-            {/* In the order the user put them in, and only the ones left on
-                (Settings › Appearance › Home buttons). */}
-            {homeButtons.map(({ key, enabled }) =>
-              enabled ? <HomeHeaderButton key={key} which={key} /> : null,
-            )}
-          </View>
-        </View>
-
-        {offline && scanning ? <ScanningPanel /> : null}
-      </View>
-
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}
         refreshControl={
@@ -972,11 +1023,44 @@ export default function HomeScreen() {
           />
         }
       >
+        {/* Scrolls away with the rest: pinned, it only took room. */}
+        <View style={styles.topHeader}>
+          <View style={styles.header}>
+            {/* `flexShrink` and `numberOfLines`: the greeting is customizable,
+                and although the setting caps it at GREETING_MAX, those characters
+                measure differently depending on the chosen font. Shrinking and
+                trimming, no text can push the buttons off-screen. */}
+            <View style={styles.headerLeft}>
+              {/* Nothing beside the greeting in the local profile. There used to
+                  be a phone in the accent colour here, and it was the one thing
+                  on the screen saying which profile you were in. That is the
+                  trouble with it: the local profile is not a state you are
+                  waiting to come out of, it is where somebody has chosen to be,
+                  and a permanent badge for it is decoration. Offline is a
+                  different matter and still says so, on the right. */}
+              {/* The screen's name when there is no greeting, where Explore and
+                  Your library have theirs. */}
+              <Text style={styles.greeting} numberOfLines={1}>
+                {showGreeting ? greeting : t('Home')}
+              </Text>
+            </View>
+            <View style={styles.headerRight}>
+              {/* Before the buttons, and dimmer than them, so it reads as a state
+                  and not as something to press. */}
+              <OfflineIndicator />
+              {/* In the order the user put them in, and only the ones left on
+                  (Settings › Appearance › Home buttons). */}
+              {homeButtons.map(({ key, enabled }) =>
+                enabled ? <HomeHeaderButton key={key} which={key} /> : null,
+              )}
+            </View>
+          </View>
+
+          {offline && scanning ? <ScanningPanel /> : null}
+        </View>
         {/* First, above the chips: what was playing on the computer is the
             thing to pick up on opening the app, when there is one. */}
         {showPlayingElsewhere ? <PlayingElsewhereCard /> : null}
-        {/* In the scroll, not the fixed header: they are a way in from the top
-            of Home, and scrolled past they were only taking room. */}
         <HomeChips offline={offline} />
         {!offline && serverUnreachable ? (
           <Message
@@ -998,6 +1082,15 @@ export default function HomeScreen() {
               if (s.key === 'discover') {
                 return (
                   <DiscoverSection key={s.key} title={t('Discover')} reshuffleKey={reshuffleKey} />
+                );
+              }
+              // The radios build on first show (a handful of requests) and
+              // are kept afterwards, so nothing here waits on the server
+              // beyond what a local profile can answer for itself.
+              if (s.key === 'radios') {
+                if (!radiosEnabled) return null;
+                return (
+                  <RadiosSection key={s.key} title={t('Radios')} reshuffleKey={reshuffleKey} />
                 );
               }
               if (s.key === 'randomArtists') {
@@ -1034,7 +1127,7 @@ export default function HomeScreen() {
 
 const styles = themed((colors) => ({
   safe: { flex: 1, backgroundColor: colors.background },
-  fixedHeader: { zIndex: 1, paddingTop: spacing.md },
+  topHeader: { paddingTop: spacing.md },
   content: { paddingBottom: spacing.md },
   header: {
     flexDirection: 'row',

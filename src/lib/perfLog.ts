@@ -10,6 +10,7 @@
  * per measured operation, so it can stay on for everyone.
  */
 
+import * as FileSystem from 'expo-file-system/legacy';
 import { AppState } from 'react-native';
 
 /**
@@ -33,6 +34,7 @@ export function setPerfEnabled(on: boolean): void {
   }
   if (timer) clearInterval(timer);
   timer = null;
+  stopJsFrames();
   resetPerfLog();
 }
 
@@ -131,7 +133,19 @@ AppState.addEventListener('change', (state) => {
   // Whatever happened out there is not ours to measure, and the clock starts
   // again here.
   lastTick = now;
-  if (!wasAwake && awake) onReturn();
+  // Going away with a history worth keeping: if the session dies out there,
+  // this file is what the next launch reads the minutes by.
+  if (wasAwake && !nowAwake) {
+    persistEvents();
+    // The JS frame loop measures nothing while away (`onJsFrame` drops every
+    // background frame) but keeps the JS thread waking up to 60×/s. On iOS the
+    // audio background mode keeps timers running, so stop it out there.
+    stopJsFrames();
+  }
+  if (!wasAwake && awake) {
+    onReturn();
+    if (enabled) startJsFrames();
+  }
 });
 
 export interface TimeSplit {
@@ -175,6 +189,9 @@ export function startPerfLog(): void {
   backgroundMs = 0;
   trips = 0;
   bgTicks = 0;
+  // No frames to count while away (see the AppState listener above, which
+  // restarts them on return).
+  if (awake) startJsFrames();
   timer = setInterval(() => {
     const now = Date.now();
     const late = now - lastTick - TICK_MS;
@@ -264,6 +281,85 @@ export function bump(tag: string, by = 1): void {
   counts.set(tag, (counts.get(tag) ?? 0) + by);
 }
 
+/**
+ * The last few things that went wrong, each with its own line.
+ *
+ * Kept whatever the switch says, unlike everything else here: they are rare,
+ * so keeping them costs nothing, and they are what a bug report needs and what
+ * nobody had turned measuring on for before it happened. In memory only.
+ */
+const MAX_EVENTS = 30;
+const events: { at: number; text: string }[] = [];
+
+export function note(text: string): void {
+  events.push({ at: Date.now(), text });
+  if (events.length > MAX_EVENTS) events.shift();
+  // Backgrounded, this may be the last thing ever written down: a kill in
+  // the background takes the memory with it, so notes taken out there go to
+  // disk at once. They are rare by design, which is what makes each one
+  // affordable to save.
+  if (!awake) persistEvents();
+}
+
+/** Oldest first, as they happened. */
+export function perfEvents(): { at: number; text: string }[] {
+  return [...events];
+}
+
+/** Where the events wait out a death in the background: a plain file, which
+ *  writes on a locked phone where SecureStore may not. */
+function eventsPath(): string | null {
+  const dir = FileSystem.documentDirectory;
+  return dir ? `${dir}diag-events.json` : null;
+}
+
+/** Writes the in-memory events where the next launch finds them. */
+export function persistEvents(): void {
+  const path = eventsPath();
+  if (!path) return;
+  try {
+    void FileSystem.writeAsStringAsync(path, JSON.stringify(events)).catch(() => {});
+  } catch {
+    // A hint that fails to save changes nothing about what it hints at.
+  }
+}
+
+/** Events a previous session left behind, read once at startup. */
+let past: { at: number; text: string }[] = [];
+export function pastEvents(): { at: number; text: string }[] {
+  return [...past];
+}
+
+/** Loads what the last session saved going away, then clears it: this
+ *  session's report carries it once, and a later one has nothing stale. */
+export async function loadPastEvents(): Promise<void> {
+  const path = eventsPath();
+  if (!path) return;
+  try {
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists) return;
+    const raw = await FileSystem.readAsStringAsync(path);
+    await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      past = parsed
+        .filter(
+          (e): e is { at: number; text: string } =>
+            !!e && typeof e === 'object' && typeof (e as { at: unknown }).at === 'number' &&
+            typeof (e as { text: unknown }).text === 'string',
+        )
+        .slice(-MAX_EVENTS);
+    }
+  } catch {
+    // Unreadable or half-written: starting with no past is the same thing a
+    // first run does.
+  }
+}
+
+export function clearPerfEvents(): void {
+  events.length = 0;
+}
+
 // ── What went out over the network ──────────────────────────────────────────
 // `ops` already times every request, but it ranks by total time and keeps the
 // top twenty, which is the wrong end of the telescope for a phone whose
@@ -300,6 +396,86 @@ export function netTally(tag: string, bytes = 0): void {
 /** Most often first, which is the question being asked of it. */
 export function perfNet(): NetStat[] {
   return [...net.values()].sort((a, b) => b.calls - a.calls);
+}
+
+// ── Frames ──────────────────────────────────────────────────────────────────
+// Stutter is frames arriving late, far below a block. JS frames are counted
+// here, UI ones in `FrameMeter`, per screen. Idle frames count, so read the
+// late ones.
+
+export const LATE_MS = 25;
+export const VERY_LATE_MS = 50;
+/** Longer than this is the app having been away. */
+export const AWAY_GAP_MS = 1000;
+
+export interface FrameCount {
+  frames: number;
+  late: number;
+  veryLate: number;
+  worstMs: number;
+}
+
+interface ScreenFrames {
+  screen: string;
+  js: FrameCount;
+  ui: FrameCount;
+}
+
+const emptyCount = (): FrameCount => ({ frames: 0, late: 0, veryLate: 0, worstMs: 0 });
+const frames = new Map<string, ScreenFrames>();
+let screen = '—';
+
+function screenFrames(): ScreenFrames {
+  let cur = frames.get(screen);
+  if (!cur) {
+    cur = { screen, js: emptyCount(), ui: emptyCount() };
+    frames.set(screen, cur);
+  }
+  return cur;
+}
+
+/** As the route pattern, `album/[id]`. */
+export function setPerfScreen(name: string): void {
+  screen = name || '—';
+}
+
+export function addUiFrames(delta: FrameCount): void {
+  if (!enabled || delta.frames === 0) return;
+  const c = screenFrames().ui;
+  c.frames += delta.frames;
+  c.late += delta.late;
+  c.veryLate += delta.veryLate;
+  if (delta.worstMs > c.worstMs) c.worstMs = delta.worstMs;
+}
+
+let rafId: number | null = null;
+let lastFrame = 0;
+
+function onJsFrame(t: number): void {
+  rafId = requestAnimationFrame(onJsFrame);
+  const dt = lastFrame ? t - lastFrame : 0;
+  lastFrame = t;
+  if (dt <= 0 || dt > AWAY_GAP_MS || !awake) return;
+  const c = screenFrames().js;
+  c.frames++;
+  if (dt > LATE_MS) c.late++;
+  if (dt > VERY_LATE_MS) c.veryLate++;
+  if (dt > c.worstMs) c.worstMs = Math.round(dt);
+}
+
+function startJsFrames(): void {
+  if (rafId !== null) return;
+  lastFrame = 0;
+  rafId = requestAnimationFrame(onJsFrame);
+}
+
+function stopJsFrames(): void {
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+export function perfFrames(): ScreenFrames[] {
+  return [...frames.values()].sort((a, b) => b.js.late + b.ui.late - (a.js.late + a.ui.late));
 }
 
 /** Minutes, hours and seconds, short enough to sit in a line of key: value. */
@@ -429,6 +605,7 @@ export function resetPerfLog(): void {
   ops.clear();
   counts.clear();
   net.clear();
+  frames.clear();
   startedAt = Date.now();
   lastTick = Date.now();
   stateSince = Date.now();
@@ -464,6 +641,12 @@ export function perfReport(): string {
   const bs = perfBlocks();
   if (bs.length === 0) lines.push('  none over 120 ms');
   for (const b of bs) lines.push(`  ${b.ms} ms · during ${b.during}`);
+  const fs = perfFrames();
+  if (fs.length > 0) {
+    lines.push('', `Frames by screen (late over ${LATE_MS} ms / over ${VERY_LATE_MS} ms, worst):`);
+    const fmt = (c: FrameCount) => `${c.frames} · ${c.late} / ${c.veryLate} late · ${c.worstMs} ms`;
+    for (const f of fs) lines.push(`  ${f.screen}: UI ${fmt(f.ui)} | JS ${fmt(f.js)}`);
+  }
   const aw = perfAway();
   if (aw.length > 0) {
     lines.push('', 'While the app was away (the player is the only clock there):');

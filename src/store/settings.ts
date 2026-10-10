@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { isLanguage, LANGUAGE_NAMES, type Language } from '@/i18n/languages';
+import { pushArtworkEncodeFps } from '@/lib/artworkEncode';
 import { type TabSegment } from '@/lib/tabOrigin';
 import { hashKey } from '@/lib/localLibrary';
 import { setPerfEnabled } from '@/lib/perfLog';
@@ -87,6 +88,17 @@ export const BITRATE_OPTIONS = [
  * much; two still overlaps one transfer with the next.
  */
 export const DOWNLOAD_CONCURRENCY_OPTIONS = [1, 2, 3];
+
+/**
+ * The fps animated covers encode at for the lock screen. 30 is the default:
+ * half the frames of 60 for a cover that reads the same, and half the work
+ * for a phone that is already doing plenty. 60 is there for whoever wants
+ * the smoother clip. The native side refuses anything above Apple's own 60.
+ */
+export const ANIMATED_ARTWORK_FPS_OPTIONS = [30, 60] as const;
+
+/** How many radios Home offers. */
+export const RADIO_COUNT_OPTIONS = [3, 6, 9] as const;
 
 /**
  * Codec to request for transcoding (Subsonic `format` parameter).
@@ -272,6 +284,14 @@ export type ScreenBackground = 'none' | 'color' | 'cover';
 export type CardBackground = 'none' | 'color';
 
 /**
+ * What fills the navigation bar: the page colour it has always had, or black
+ * fading out at the top edge, so the bar has no edge to show against whatever
+ * scrolls under it. Gradient wins over the blur, and the blur setting does
+ * nothing while it is on.
+ */
+export type NavBarStyle = 'solid' | 'gradient';
+
+/**
  * What tapping the cover in the player does.
  *
  * One tap and two draw from the same list. Which action belongs on which is
@@ -327,8 +347,14 @@ export type CoverDoubleTapAction = CoverTapAction;
  */
 export type LyricsSource = 'local' | 'online' | 'off';
 
-/** Type size on the full-screen lyrics. */
+/** Type size on every lyrics surface. */
 export type LyricsSize = 'small' | 'normal' | 'large';
+/** Each size in full-screen points; the compact surfaces scale from these. */
+export const LYRICS_SIZE_POINTS: Record<LyricsSize, number> = { small: 22, normal: 28, large: 34 };
+
+/** Font weights Android and iOS can both synthesize consistently. */
+export const LYRICS_WEIGHTS = ['300', '400', '500', '600', '700'] as const;
+export type LyricsWeight = (typeof LYRICS_WEIGHTS)[number];
 export type LyricsAlign = 'left' | 'center';
 /** What sits next to play on the mini player. */
 export type MiniPlayerButtons = 'favorite' | 'next' | 'previousNext' | 'none';
@@ -369,6 +395,7 @@ export type HomeSectionKey =
   | 'mostPlayedSongs'
   | 'randomSongs'
   | 'discover'
+  | 'radios'
   | 'playlists'
   | 'podcasts'
   | 'randomAlbums'
@@ -388,6 +415,7 @@ const HOME_SECTION_KEYS: HomeSectionKey[] = [
   'mostPlayedSongs',
   'randomSongs',
   'discover',
+  'radios',
   'playlists',
   'podcasts',
   'randomAlbums',
@@ -410,6 +438,8 @@ const HOME_SECTION_KEYS: HomeSectionKey[] = [
  */
 export const DEFAULT_HOME_SECTIONS: HomeSection[] = [
   { key: 'discover', enabled: true },
+  // The personalised artist radios, built from this server's play counts.
+  { key: 'radios', enabled: true },
   { key: 'playlists', enabled: true },
   // Draws nothing without a subscription, so it costs nobody a row.
   { key: 'podcasts', enabled: true },
@@ -501,17 +531,18 @@ const HOME_CHIP_KEYS: HomeChipKey[] = [
   'history',
 ];
 
-/** Default order and state: the usual ones, all visible. */
+/** Default order and state: the usual ones, all hidden until
+ *  someone turns them on. */
 export const DEFAULT_HOME_CHIPS: HomeChip[] = [
-  { key: 'shuffle', enabled: true },
-  { key: 'favorites', enabled: true },
-  { key: 'history', enabled: true },
-  { key: 'albums', enabled: true },
-  { key: 'artists', enabled: true },
-  { key: 'songs', enabled: true },
-  { key: 'genres', enabled: true },
-  { key: 'podcasts', enabled: true },
-  { key: 'radio', enabled: true },
+  { key: 'shuffle', enabled: false },
+  { key: 'favorites', enabled: false },
+  { key: 'history', enabled: false },
+  { key: 'albums', enabled: false },
+  { key: 'artists', enabled: false },
+  { key: 'songs', enabled: false },
+  { key: 'genres', enabled: false },
+  { key: 'podcasts', enabled: false },
+  { key: 'radio', enabled: false },
 ];
 
 /** One of the pills at the top of Explore. `genres`, `radio` and `folders`
@@ -623,14 +654,14 @@ function normalizeBottomTabs(raw: unknown): BottomTab[] {
  * is only reachable from there, so hiding it would leave no way back to this
  * very screen.
  */
-export type HomeButtonKey = 'search' | 'history' | 'settings';
+export type HomeButtonKey = 'queue' | 'search' | 'history' | 'settings';
 
 export interface HomeButton {
   key: HomeButtonKey;
   enabled: boolean;
 }
 
-const HOME_BUTTON_KEYS: HomeButtonKey[] = ['search', 'history', 'settings'];
+const HOME_BUTTON_KEYS: HomeButtonKey[] = ['queue', 'search', 'history', 'settings'];
 
 /**
  * Left to right as they shipped.
@@ -640,6 +671,9 @@ const HOME_BUTTON_KEYS: HomeButtonKey[] = ['search', 'history', 'settings'];
  * there for whoever takes that tab off the bar, or just prefers it up here.
  */
 export const DEFAULT_HOME_BUTTONS: HomeButton[] = [
+  // Off: the player and the mini player already lead there. For whoever hides
+  // the player's buttons and wants it a tap from Home (#248).
+  { key: 'queue', enabled: false },
   { key: 'search', enabled: true },
   { key: 'history', enabled: true },
   { key: 'settings', enabled: true },
@@ -653,11 +687,15 @@ export interface PlayerButton {
   enabled: boolean;
 }
 
+/**
+ * Devices and queue on, the rest off: lyrics have their card and the ⋯ menu,
+ * the sleep timer the ⋯ menu, and speed is for the few who turn it on.
+ */
 export const DEFAULT_PLAYER_BUTTONS: PlayerButton[] = [
   { key: 'devices', enabled: true },
-  { key: 'lyrics', enabled: true },
-  { key: 'speed', enabled: true },
-  { key: 'sleep', enabled: true },
+  { key: 'lyrics', enabled: false },
+  { key: 'speed', enabled: false },
+  { key: 'sleep', enabled: false },
   { key: 'queue', enabled: true },
 ];
 
@@ -770,6 +808,7 @@ type PersistedKey = keyof Persisted;
  *  anything and checks. */
 type Reshaped =
   | 'showAudioQuality'
+  | 'lyricsSize'
   | 'homeSections'
   | 'homeChips'
   | 'exploreSections'
@@ -798,6 +837,7 @@ type CustomSetter =
   | 'setThemeLightFrom'
   | 'setThemeDarkFrom'
   | 'setPureBlack'
+  | 'setAnimatedArtworkFps'
   | 'setBackgroundTint';
 
 interface SettingsState extends Omit<AutoSetters, CustomSetter> {
@@ -858,6 +898,8 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   alwaysShowTabs: boolean;
   /** Blur what scrolls under the navigation bar. */
   blurBars: boolean;
+  /** What the navigation bar is filled with: flat, or fading out at the top. */
+  navBarStyle: NavBarStyle;
   /** Blur what scrolls under the mini player. */
   blurMiniPlayer: boolean;
   /** Song duration in lists (Spotify doesn't show it). */
@@ -874,6 +916,15 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   showExplicitTag: boolean;
   /** When the queue ends, continue with similar songs (getSimilarSongs2). */
   autoplaySimilar: boolean;
+  /**
+   * The artist radios at all. Off, nothing is built or asked for: no shelf on
+   * Home, no radio in the menus, no round added at the end of one.
+   */
+  radiosEnabled: boolean;
+  /** How many radios Home offers (`RADIO_COUNT_OPTIONS`). */
+  radioCount: number;
+  /** A radio draws another round when its songs run out. */
+  radioEndless: boolean;
   /**
    * Whether the app measures itself (Settings › About → Diagnostics). On for
    * everybody, since a report from the phone with the problem is worth more
@@ -908,6 +959,18 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
    * (transcodes, stats) without the user asking.
    */
   preloadUpcoming: boolean;
+  /**
+   * Ask the asset for frame-exact timing before anything plays: the
+   * `AVURLAssetPreferPreciseDurationAndTimingKey` on iOS, which is what makes a
+   * seek land on the exact frame and the duration be the file's own. The cost
+   * is a scan of the file for an index before the first second plays - on a
+   * stream that has none (a transcoded mp3 over HTTP) that scan is the wait
+   * before a track starts. Off by default: the clock follows the audio either
+   * way, so positions, lyrics and scrobbles stay in step; what off gives up is
+   * exact seek landing and exact duration on the files that need a scan to
+   * know it. iOS only.
+   */
+  preferPreciseTiming: boolean;
   /**
    * Auto-switch between online and offline based on connectivity: fall back to
    * downloads when the server doesn't respond and reconnect when it comes back.
@@ -944,7 +1007,11 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
    */
   lyricsSource: LyricsSource;
   lyricsSize: LyricsSize;
+  /** Thickness of lyric glyphs, from light (300) to bold (700). */
+  lyricsWeight: LyricsWeight;
   lyricsAlign: LyricsAlign;
+  /** Progressively blur synchronized lyric rows away from the current line. */
+  blurInactiveLyrics: boolean;
   /** The names under the icons of the navigation bar. */
   showTabLabels: boolean;
   miniPlayerButtons: MiniPlayerButtons;
@@ -983,6 +1050,12 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
    * the title. Off by default: the cover plays inside the square as before.
    */
   animatedCoverBackground: boolean;
+  /**
+   * The fps animated covers encode at for the lock screen (30 or 60). A clip
+   * already on disk keeps the rate it was written at; the next one picks up
+   * whatever this says.
+   */
+  animatedArtworkFps: number;
   /**
    * Show non-square artwork whole in the player instead of cropping it to a
    * square. Off by default: cropping is what it has always done, and every
@@ -1055,18 +1128,6 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   homeButtons: HomeButton[];
   /** App startup tab (Home/Search/Library). */
   defaultTab: DefaultTab;
-  /**
-   * Whether coming back from the background leaves the app where it was.
-   *
-   * Off, which is what it has always done: a few minutes away and the app
-   * opens on the tab above, the way Spotify and YouTube do, on the grounds
-   * that a screen you left behind an hour ago is not one you meant to come
-   * back to. Some people mean it (#225), and for them the reset is the app
-   * throwing away what they were in the middle of. The setting only touches
-   * the return; a cold start has nothing to preserve and still opens on the
-   * chosen tab.
-   */
-  keepScreenOnReturn: boolean;
   /** Your library with no chip pressed shows Favorites and the playlists, as
    *  it did before the mixed view, instead of everything (#217). */
   libraryShowsPlaylists: boolean;
@@ -1140,6 +1201,7 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   customFontUri: string | null;
   setLanguage: (language: Language) => void;
   setDiagnostics: (value: boolean) => void;
+  setAnimatedArtworkFps: (value: number) => void;
   resetScrobbleRules: () => void;
   setHideUnavailableOffline: (value: boolean) => void;
   setReplayGainPreampDb: (value: number) => void;
@@ -1162,6 +1224,8 @@ interface SettingsState extends Omit<AutoSetters, CustomSetter> {
   setCustomFont: (fontFamily: string | null, uri: string | null) => void;
   /** Resets to factory defaults (language is preserved). */
   resetToDefaults: () => void;
+  /** Replaces every setting with an exported file's (#243). */
+  importSettings: (saved: unknown) => void;
   /** The saved settings have been read from disk. Until then everything is at
    *  its default, so anything that acts ON a setting must wait for this. */
   hydrated: boolean;
@@ -1216,6 +1280,7 @@ const DEFAULTS = {
   showPlaylistDescription: true,
   alwaysShowTabs: true,
   blurBars: true,
+  navBarStyle: 'solid' as NavBarStyle,
   blurMiniPlayer: true,
   showSongDuration: false,
   showListRating: false,
@@ -1223,6 +1288,9 @@ const DEFAULTS = {
   // nowhere, and where it does draw it is the tag the file was given.
   showExplicitTag: true,
   autoplaySimilar: true,
+  radiosEnabled: true,
+  radioCount: 6,
+  radioEndless: true,
   // Off: measuring is for somebody who is being asked to measure. Everyone
   // else was paying for a report they will never send.
   diagnostics: false,
@@ -1232,6 +1300,7 @@ const DEFAULTS = {
   scrobblePercent: SCROBBLE_PERCENT_DEFAULT,
   scrobbleSeconds: SCROBBLE_SECONDS_DEFAULT,
   preloadUpcoming: false,
+  preferPreciseTiming: false,
   autoOfflineSwitch: true,
   hideUnavailableOffline: false,
   replayGain: 'off' as ReplayGainMode,
@@ -1244,7 +1313,10 @@ const DEFAULTS = {
   lyricsCardBackground: 'color' as CardBackground,
   lyricsSource: 'local' as LyricsSource,
   lyricsSize: 'normal' as LyricsSize,
+  lyricsWeight: '500' as LyricsWeight,
   lyricsAlign: 'left' as LyricsAlign,
+  // Opt-in, matching Primuse: it changes the reading treatment substantially.
+  blurInactiveLyrics: false,
   showTabLabels: true,
   miniPlayerButtons: 'favorite' as MiniPlayerButtons,
   miniPlayerProgress: true,
@@ -1257,6 +1329,9 @@ const DEFAULTS = {
   batteryWarning: true,
   playerBackground: 'cover' as ScreenBackground,
   animatedCoverBackground: false,
+  // 30: half the frames of 60 for a cover that reads the same; see
+  // `ANIMATED_ARTWORK_FPS_OPTIONS`.
+  animatedArtworkFps: 30,
   fitCoverArt: false,
   miniPlayerColorBackground: true,
   // Off by default: the card pushes the controls up on shorter screens, and
@@ -1270,7 +1345,7 @@ const DEFAULTS = {
   coverDoubleTapAction: 'none' as CoverDoubleTapAction,
   marqueeTitles: true,
   playerButtons: DEFAULT_PLAYER_BUTTONS.map((b) => ({ ...b })),
-  playerButtonsLayout: 'centered' as PlayerButtonsLayout,
+  playerButtonsLayout: 'spread' as PlayerButtonsLayout,
   seekButtonsSec: 0,
   previousButtonMode: 'restart' as PreviousButtonMode,
   keepPausedOnSkip: false,
@@ -1279,7 +1354,7 @@ const DEFAULTS = {
   swipeAction: 'queue' as SwipeAction,
   swipeLeftAction: 'off' as SwipeAction,
   homeSections: DEFAULT_HOME_SECTIONS.map((s) => ({ ...s })),
-  showQuickGrid: true,
+  showQuickGrid: false,
   showPlayingElsewhere: true,
   quickGridFavorites: true,
   quickGridAlbums: true,
@@ -1294,7 +1369,6 @@ const DEFAULTS = {
   showFolderBrowser: false,
   homeButtons: DEFAULT_HOME_BUTTONS.map((b) => ({ ...b })),
   defaultTab: 'index' as DefaultTab,
-  keepScreenOnReturn: false,
   libraryShowsPlaylists: false,
   librarySort: 'recent' as LibrarySort,
   libraryLayout: 'list' as ListLayout,
@@ -1367,6 +1441,395 @@ function autoSetters(
   return out as AutoSetters;
 }
 
+/** The appearance side effects of the factory values: they live outside the
+ *  store, so putting the store back does not put them back. */
+function applyFactoryLook() {
+  applyAccents(DEFAULT_ACCENT, DEFAULT_ACCENT);
+  applyThemeSchedule(DEFAULTS.themeLightFrom, DEFAULTS.themeDarkFrom);
+  applyThemePreference(DEFAULTS.themeMode);
+  applyPureBlack(DEFAULTS.pureBlack);
+  applyBackgroundTint(DEFAULTS.backgroundTint);
+}
+
+/**
+ * A saved blob onto what is in the store, which the caller has already put at
+ * the factory values. Shared by the read at startup and an imported file (#243),
+ * so both go through the same checks and the same migrations.
+ */
+function applySaved(raw: unknown, set: (partial: Partial<SettingsState>) => void) {
+  // Typed as what this version writes, plus the earlier shapes that are
+  // read only to migrate them. Nothing here is trusted: every value is
+  // checked before it is used.
+  const parsed = (raw && typeof raw === 'object' ? raw : {}) as Partial<Omit<Persisted, Reshaped>> & {
+    showAudioQuality?: string | boolean;
+    homeSections?: unknown;
+    homeChips?: unknown;
+    exploreSections?: unknown;
+    bottomTabs?: unknown;
+    homeButtons?: unknown;
+    playerButtons?: unknown;
+    showQueueButton?: boolean;
+    showDevicesButton?: boolean;
+    showSpeedButton?: boolean;
+    lyricsColorBackground?: boolean;
+    lyricsOnlineFallback?: boolean;
+    lyricsSize?: unknown;
+    playerColorBackground?: boolean;
+    swipeToQueue?: boolean;
+    showExploreChips?: boolean;
+    exploreChips?: unknown;
+    exploreChipIcons?: boolean;
+    showHistoryButton?: boolean;
+  };
+  // Every on/off setting the same way: a saved boolean is taken as is.
+  // The few that also migrate an older value do that further down.
+  const flags: Record<string, boolean> = {};
+  for (const key of PERSISTED_KEYS) {
+    const value: unknown = parsed[key];
+    if (typeof DEFAULTS[key] === 'boolean' && typeof value === 'boolean') flags[key] = value;
+  }
+  set(flags as Partial<SettingsState>);
+  // One switch used to blur both bars.
+  if (typeof parsed.blurMiniPlayer !== 'boolean' && typeof parsed.blurBars === 'boolean') {
+    set({ blurMiniPlayer: parsed.blurBars });
+  }
+  if (typeof parsed.maxBitRate === 'number') {
+    set({ maxBitRate: parsed.maxBitRate });
+  }
+  if (typeof parsed.maxBitRateCellular === 'number') {
+    set({ maxBitRateCellular: parsed.maxBitRateCellular });
+  } else if (typeof parsed.maxBitRate === 'number') {
+    // Previously there was a single streaming quality: whoever had it set
+    // inherits the same value for cellular (identical behavior until they
+    // touch the new setting).
+    set({ maxBitRateCellular: parsed.maxBitRate });
+  }
+  if (typeof parsed.downloadBitRate === 'number') {
+    set({ downloadBitRate: parsed.downloadBitRate });
+  }
+  if (DOWNLOAD_CONCURRENCY_OPTIONS.includes(parsed.downloadConcurrency as number)) {
+    set({ downloadConcurrency: parsed.downloadConcurrency as number });
+  }
+  if ((ANIMATED_ARTWORK_FPS_OPTIONS as readonly number[]).includes(parsed.animatedArtworkFps as number)) {
+    set({ animatedArtworkFps: parsed.animatedArtworkFps as number });
+  }
+  if ((RADIO_COUNT_OPTIONS as readonly number[]).includes(parsed.radioCount as number)) {
+    set({ radioCount: parsed.radioCount as number });
+  }
+  if (TRANSCODE_FORMATS.includes(parsed.streamFormat as TranscodeFormat)) {
+    set({ streamFormat: parsed.streamFormat as TranscodeFormat });
+  }
+  if (TRANSCODE_FORMATS.includes(parsed.streamFormatCellular as TranscodeFormat)) {
+    set({ streamFormatCellular: parsed.streamFormatCellular as TranscodeFormat });
+  } else if (TRANSCODE_FORMATS.includes(parsed.streamFormat as TranscodeFormat)) {
+    // Previously there was a single streaming codec: whoever had it set
+    // keeps it on both networks until they touch the new setting.
+    set({ streamFormatCellular: parsed.streamFormat as TranscodeFormat });
+  }
+  if (TRANSCODE_FORMATS.includes(parsed.downloadFormat as TranscodeFormat)) {
+    set({ downloadFormat: parsed.downloadFormat as TranscodeFormat });
+  }
+  if (SONG_CACHE_LIMITS_GB.includes(parsed.songCacheLimitGb as number)) {
+    set({ songCacheLimitGb: parsed.songCacheLimitGb as number });
+  }
+  // `language` is no longer applied here: it's global, loaded at the end.
+  // It used to be a mode ('off'/'player'/'everywhere'); now a simple
+  // on/off. Map old values: any mode that showed the label maps to on.
+  if (typeof parsed.showAudioQuality === 'boolean') {
+    set({ showAudioQuality: parsed.showAudioQuality });
+  } else if (parsed.showAudioQuality === 'player' || parsed.showAudioQuality === 'everywhere') {
+    set({ showAudioQuality: true });
+  } else if (parsed.showAudioQuality === 'off') {
+    set({ showAudioQuality: false });
+  }
+  if (typeof parsed.crossfadeSec === 'number' && parsed.crossfadeSec >= 0) {
+    set({ crossfadeSec: parsed.crossfadeSec });
+  }
+  // Clamped rather than only checked: these two decide whether a listen
+  // is reported at all, and a file with a percentage of 4000 in it would
+  // otherwise turn scrobbling off in a way nothing on screen explains.
+  if (typeof parsed.scrobblePercent === 'number' && parsed.scrobblePercent >= 0) {
+    set({ scrobblePercent: Math.min(100, Math.round(parsed.scrobblePercent)) });
+  }
+  if (typeof parsed.scrobbleSeconds === 'number' && parsed.scrobbleSeconds >= 0) {
+    set({
+      scrobbleSeconds: Math.min(SCROBBLE_SECONDS_MAX, Math.round(parsed.scrobbleSeconds)),
+    });
+  }
+  if (
+    parsed.replayGain === 'off' ||
+    parsed.replayGain === 'auto' ||
+    parsed.replayGain === 'track' ||
+    parsed.replayGain === 'album'
+  ) {
+    set({ replayGain: parsed.replayGain });
+  }
+  if (typeof parsed.replayGainPreampDb === 'number') {
+    set({ replayGainPreampDb: clampReplayGainPreamp(parsed.replayGainPreampDb) });
+  }
+  if (parsed.lyricsBackground === 'none' || parsed.lyricsBackground === 'color' || parsed.lyricsBackground === 'cover') {
+    set({ lyricsBackground: parsed.lyricsBackground });
+  } else if (typeof parsed.lyricsColorBackground === 'boolean') {
+    // Same migration as the player's: on → tinted, off → flat.
+    set({ lyricsBackground: parsed.lyricsColorBackground ? 'color' : 'none' });
+  }
+  // The card used to follow the lyrics screen's setting, so a profile
+  // without its own value inherits whatever the screen had.
+  if (parsed.lyricsCardBackground === 'none' || parsed.lyricsCardBackground === 'color') {
+    set({ lyricsCardBackground: parsed.lyricsCardBackground });
+  } else if (parsed.lyricsBackground === 'none') {
+    set({ lyricsCardBackground: 'none' });
+  } else if (typeof parsed.lyricsColorBackground === 'boolean') {
+    set({ lyricsCardBackground: parsed.lyricsColorBackground ? 'color' : 'none' });
+  }
+  if (
+    parsed.lyricsSource === 'local' ||
+    parsed.lyricsSource === 'online' ||
+    parsed.lyricsSource === 'off'
+  ) {
+    set({ lyricsSource: parsed.lyricsSource });
+  } else if (typeof parsed.lyricsOnlineFallback === 'boolean') {
+    // Migrate the old boolean: on = local first with online fallback, off = no online.
+    set({ lyricsSource: parsed.lyricsOnlineFallback ? 'local' : 'off' });
+  }
+  const oneOf = <T extends string>(v: unknown, all: readonly T[]): v is T =>
+    all.includes(v as T);
+  if (oneOf(parsed.lyricsSize, ['small', 'normal', 'large'] as const)) {
+    set({ lyricsSize: parsed.lyricsSize });
+  } else if (typeof parsed.lyricsSize === 'number') {
+    // A build briefly stored it as points: the nearest of the three.
+    const pts = parsed.lyricsSize;
+    set({ lyricsSize: pts < 25 ? 'small' : pts < 31 ? 'normal' : 'large' });
+  }
+  if (oneOf(parsed.lyricsWeight, LYRICS_WEIGHTS)) {
+    set({ lyricsWeight: parsed.lyricsWeight });
+  }
+  if (oneOf(parsed.lyricsAlign, ['left', 'center'] as const)) {
+    set({ lyricsAlign: parsed.lyricsAlign });
+  }
+  if (oneOf(parsed.miniPlayerButtons, ['favorite', 'next', 'previousNext', 'none'] as const)) {
+    set({ miniPlayerButtons: parsed.miniPlayerButtons });
+  }
+  if (oneOf(parsed.coverCorners, ['square', 'rounded', 'round'] as const)) {
+    set({ coverCorners: parsed.coverCorners });
+  }
+  if (
+    parsed.preferDownloads === 'always' ||
+    parsed.preferDownloads === 'cellular' ||
+    parsed.preferDownloads === 'original' ||
+    parsed.preferDownloads === 'never'
+  ) {
+    set({ preferDownloads: parsed.preferDownloads });
+  }
+  if (parsed.playerBackground === 'none' || parsed.playerBackground === 'color' || parsed.playerBackground === 'cover') {
+    set({ playerBackground: parsed.playerBackground });
+  } else if (typeof parsed.playerColorBackground === 'boolean') {
+    // Migration from the old boolean: on → the tinted background it
+    // already had, off → flat. Profiles saved before the blurred cover
+    // option existed keep looking exactly the same.
+    set({ playerBackground: parsed.playerColorBackground ? 'color' : 'none' });
+  }
+  if (isCoverTapAction(parsed.coverTapAction)) {
+    set({ coverTapAction: parsed.coverTapAction });
+  }
+  if (isCoverTapAction(parsed.coverDoubleTapAction)) {
+    set({ coverDoubleTapAction: parsed.coverDoubleTapAction });
+  }
+  if (parsed.seekButtonsSec === 0 || parsed.seekButtonsSec === 5 || parsed.seekButtonsSec === 10 || parsed.seekButtonsSec === 30) {
+    set({ seekButtonsSec: parsed.seekButtonsSec });
+  }
+  if (parsed.previousButtonMode === 'restart' || parsed.previousButtonMode === 'always') {
+    set({ previousButtonMode: parsed.previousButtonMode });
+  }
+  if (parsed.navBarStyle === 'solid' || parsed.navBarStyle === 'gradient') {
+    set({ navBarStyle: parsed.navBarStyle });
+  }
+  if (
+    parsed.swipeAction === 'off' ||
+    parsed.swipeAction === 'queue' ||
+    parsed.swipeAction === 'next' ||
+    parsed.swipeAction === 'favorite' ||
+    parsed.swipeAction === 'menu'
+  ) {
+    set({ swipeAction: parsed.swipeAction });
+  } else if (typeof parsed.swipeToQueue === 'boolean') {
+    // Migration from the old setting: on → queue, off → nothing.
+    set({ swipeAction: parsed.swipeToQueue ? 'queue' : 'off' });
+  }
+  if (
+    parsed.swipeLeftAction === 'off' ||
+    parsed.swipeLeftAction === 'queue' ||
+    parsed.swipeLeftAction === 'next' ||
+    parsed.swipeLeftAction === 'favorite' ||
+    parsed.swipeLeftAction === 'menu'
+  ) {
+    set({ swipeLeftAction: parsed.swipeLeftAction });
+  }
+  if (Array.isArray(parsed.homeSections)) {
+    set({ homeSections: normalizeHomeSections(parsed.homeSections) });
+  }
+  if (parsed.quickGridSize === 4 || parsed.quickGridSize === 6 || parsed.quickGridSize === 8) {
+    set({ quickGridSize: parsed.quickGridSize });
+  }
+  // Truncated on hydrate: a setting saved by a version with a different
+  // cap must not sneak in longer than what fits.
+  if (typeof parsed.customGreeting === 'string') {
+    set({ customGreeting: parsed.customGreeting.slice(0, GREETING_MAX) });
+  }
+  // Two older names are still read here, and this is the whole of the
+  // rename's cost. The row used to be called the Explore chips, one word
+  // away from the Explore tab and meaning something else entirely; a
+  // file written before the rename says `exploreChips`, and whoever had
+  // spent time putting those in order would have found them back at the
+  // defaults. Written under the new name from the first save on, so this
+  // only ever runs once per install.
+  const chipIcons = parsed.homeChipIcons ?? parsed.exploreChipIcons;
+  if (typeof chipIcons === 'boolean') {
+    set({ homeChipIcons: chipIcons });
+  }
+  const chips = parsed.homeChips ?? parsed.exploreChips;
+  if (Array.isArray(chips)) {
+    set({ homeChips: normalizeHomeChips(chips) });
+  } else if (parsed.showExploreChips === false) {
+    // Migration from the single toggle that came before either name:
+    // whoever had the row hidden should still not see it, not find the
+    // chips back. Turning them all off is exactly what hides it now.
+    set({ homeChips: DEFAULT_HOME_CHIPS.map((c) => ({ ...c, enabled: false })) });
+  }
+  if (Array.isArray(parsed.bottomTabs)) {
+    set({ bottomTabs: normalizeBottomTabs(parsed.bottomTabs) });
+  }
+  if (Array.isArray(parsed.exploreSections)) {
+    set({ exploreSections: normalizeExploreSections(parsed.exploreSections) });
+  }
+  if (Array.isArray(parsed.homeButtons)) {
+    set({ homeButtons: normalizeHomeButtons(parsed.homeButtons) });
+  } else if (parsed.showHistoryButton === false) {
+    // Migration from the previous single toggle: the clock was the only
+    // one of these with a switch, and whoever had it hidden should not
+    // find it back.
+    set({
+      homeButtons: DEFAULT_HOME_BUTTONS.map((b) =>
+        b.key === 'history' ? { ...b, enabled: false } : { ...b },
+      ),
+    });
+  }
+  if (parsed.playerButtonsLayout === 'centered' || parsed.playerButtonsLayout === 'spread') {
+    set({ playerButtonsLayout: parsed.playerButtonsLayout });
+  }
+  if (Array.isArray(parsed.playerButtons)) {
+    set({ playerButtons: normalizePlayerButtons(parsed.playerButtons) });
+  } else {
+    // From the three switches there were before: whoever had one of them
+    // off does not find it back. Speed was off unless turned on.
+    const off = new Set<PlayerButtonKey>();
+    if (parsed.showQueueButton === false) off.add('queue');
+    if (parsed.showDevicesButton === false) off.add('devices');
+    if (parsed.showSpeedButton !== true && 'showQueueButton' in parsed) off.add('speed');
+    set({
+      playerButtons: DEFAULT_PLAYER_BUTTONS.map((b) => ({ ...b, enabled: !off.has(b.key) })),
+    });
+  }
+  if (
+    parsed.defaultTab === 'index' ||
+    parsed.defaultTab === 'search' ||
+    parsed.defaultTab === 'library' ||
+    parsed.defaultTab === 'explore'
+  ) {
+    set({ defaultTab: parsed.defaultTab });
+  }
+  if (parsed.librarySort === 'recent' || parsed.librarySort === 'added' || parsed.librarySort === 'alpha') {
+    set({ librarySort: parsed.librarySort });
+  }
+  if (parsed.libraryLayout === 'list' || parsed.libraryLayout === 'grid') {
+    set({ libraryLayout: parsed.libraryLayout });
+  }
+  if (parsed.browseArtistsLayout === 'list' || parsed.browseArtistsLayout === 'grid') {
+    set({ browseArtistsLayout: parsed.browseArtistsLayout });
+  }
+  if (parsed.browseAlbumsLayout === 'list' || parsed.browseAlbumsLayout === 'grid') {
+    set({ browseAlbumsLayout: parsed.browseAlbumsLayout });
+  }
+  if (parsed.browsePlaylistsLayout === 'list' || parsed.browsePlaylistsLayout === 'grid') {
+    set({ browsePlaylistsLayout: parsed.browsePlaylistsLayout });
+  }
+  if (
+    parsed.browsePlaylistsSort === 'recent' ||
+    parsed.browsePlaylistsSort === 'added' ||
+    parsed.browsePlaylistsSort === 'alpha'
+  ) {
+    set({ browsePlaylistsSort: parsed.browsePlaylistsSort });
+  }
+  if (parsed.browseSongsLayout === 'list' || parsed.browseSongsLayout === 'grid') {
+    set({ browseSongsLayout: parsed.browseSongsLayout });
+  }
+  if (parsed.discographyLayout === 'list' || parsed.discographyLayout === 'grid') {
+    set({ discographyLayout: parsed.discographyLayout });
+  }
+  if (parsed.genreLayout === 'list' || parsed.genreLayout === 'grid') {
+    set({ genreLayout: parsed.genreLayout });
+  }
+  // Read key by key rather than taken whole: a number from a file is the
+  // one thing here that decides how a list is laid out, and a stray one
+  // would be a screen that renders with columns nobody can choose. Keys
+  // that are not grids any more simply do not survive the read.
+  if (parsed.gridColumns && typeof parsed.gridColumns === 'object') {
+    const cols: Partial<Record<GridSizeKey, number>> = {};
+    for (const [key, value] of Object.entries(parsed.gridColumns)) {
+      // A grid remembers a phone and a tablet apart, so the key can carry
+      // which one it is; the grid itself has to be one that still exists.
+      const wide = key.endsWith(':wide');
+      if (!(key.replace(/:wide$/, '') in GRID_DEFAULT_COLUMNS)) continue;
+      const choices = wide ? WIDE_COLUMN_CHOICES : GRID_COLUMN_CHOICES;
+      if (choices.includes(value as number)) cols[key as GridSizeKey] = value as number;
+    }
+    set({ gridColumns: cols });
+  }
+  if (SHARE_EXPIRIES.includes(parsed.shareExpiry as ShareExpiry)) {
+    set({ shareExpiry: parsed.shareExpiry as ShareExpiry });
+  }
+  // The light accent falls back to the dark one rather than to the
+  // default: every profile that picked a colour before there were two of
+  // them picked it for the app, not for one of its appearances.
+  if (isHexColor(parsed.accentColor) || isHexColor(parsed.accentColorLight)) {
+    const dark = isHexColor(parsed.accentColor) ? parsed.accentColor : DEFAULT_ACCENT;
+    const light = isHexColor(parsed.accentColorLight) ? parsed.accentColorLight : dark;
+    set({ accentColor: dark, accentColorLight: light });
+    applyAccents(dark, light);
+  }
+  if (isHexColor(parsed.customAccentColor)) {
+    set({ customAccentColor: parsed.customAccentColor });
+  }
+  {
+    const hour = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 23 ? (v as number) : null);
+    const light = hour(parsed.themeLightFrom) ?? DEFAULTS.themeLightFrom;
+    const dark = hour(parsed.themeDarkFrom) ?? DEFAULTS.themeDarkFrom;
+    set({ themeLightFrom: light, themeDarkFrom: dark });
+    applyThemeSchedule(light, dark);
+  }
+  if (isThemePreference(parsed.themeMode)) {
+    set({ themeMode: parsed.themeMode });
+    applyThemePreference(parsed.themeMode);
+  }
+  if (typeof parsed.pureBlack === 'boolean') {
+    set({ pureBlack: parsed.pureBlack });
+    applyPureBlack(parsed.pureBlack);
+  }
+  if (typeof parsed.backgroundTint === 'string' && parsed.backgroundTint in BACKGROUND_TINTS) {
+    set({ backgroundTint: parsed.backgroundTint });
+    applyBackgroundTint(parsed.backgroundTint);
+  }
+  if (parsed.appFont && (parsed.appFont in APP_FONT_FAMILY || parsed.appFont === 'custom')) {
+    set({ appFont: parsed.appFont });
+  }
+  if (parsed.customFontFamily) {
+    set({ customFontFamily: parsed.customFontFamily });
+  }
+  if (parsed.customFontUri) {
+    set({ customFontUri: parsed.customFontUri });
+  }
+}
+
 export const useSettings = create<SettingsState>((set, get) => ({
   ...DEFAULTS,
   hydrated: false,
@@ -1381,6 +1844,14 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ diagnostics });
     setPerfEnabled(diagnostics);
     persist(snapshot(get));
+  },
+
+  setAnimatedArtworkFps: (animatedArtworkFps) => {
+    set({ animatedArtworkFps });
+    persist(snapshot(get));
+    // The encoder reads this the next time a clip is built; one already on
+    // disk keeps the rate it was written at, which is the rate it holds.
+    pushArtworkEncodeFps(animatedArtworkFps);
   },
 
   // Both at once, and one write: put back separately, the first of the two
@@ -1509,12 +1980,23 @@ export const useSettings = create<SettingsState>((set, get) => ({
   resetToDefaults: () => {
     // Language is preserved: resetting shouldn't change your language.
     set({ ...DEFAULTS, language: get().language });
-    applyAccents(DEFAULT_ACCENT, DEFAULT_ACCENT);
-    applyThemeSchedule(DEFAULTS.themeLightFrom, DEFAULTS.themeDarkFrom);
-    applyThemePreference(DEFAULTS.themeMode);
-    applyPureBlack(DEFAULTS.pureBlack);
-    applyBackgroundTint(DEFAULTS.backgroundTint);
+    applyFactoryLook();
+    pushArtworkEncodeFps(get().animatedArtworkFps);
     persist(snapshot(get));
+  },
+
+  importSettings: (saved) => {
+    // The font file stays on the phone that picked it, so the one here is kept
+    // and a custom font this phone does not have falls back to the default.
+    const { language, customFontFamily, customFontUri } = get();
+    set({ ...DEFAULTS, language, customFontFamily, customFontUri });
+    applyFactoryLook();
+    applySaved({ ...(saved as object), customFontFamily: null, customFontUri: null }, set);
+    if (get().appFont === 'custom' && !customFontFamily) set({ appFont: 'system' });
+    setPerfEnabled(get().diagnostics);
+    pushArtworkEncodeFps(get().animatedArtworkFps);
+    persist(snapshot(get));
+    if (useAuthStore.getState().offline) queryClient.invalidateQueries();
   },
 
   hydrate: async () => {
@@ -1542,368 +2024,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
       // appearance are applied manually because they're side effects (the blob
       // re-applies them if present); the font is reactive and doesn't need it.
       set({ ...DEFAULTS, language: get().language });
-      applyAccents(DEFAULT_ACCENT, DEFAULT_ACCENT);
-      applyThemeSchedule(DEFAULTS.themeLightFrom, DEFAULTS.themeDarkFrom);
-      applyThemePreference(DEFAULTS.themeMode);
-      applyPureBlack(DEFAULTS.pureBlack);
-    applyBackgroundTint(DEFAULTS.backgroundTint);
+      applyFactoryLook();
       applied = true;
-      if (raw) {
-        // Typed as what this version writes, plus the earlier shapes that are
-        // read only to migrate them. Nothing here is trusted: every value is
-        // checked before it is used.
-        const parsed = JSON.parse(raw) as Partial<Omit<Persisted, Reshaped>> & {
-          showAudioQuality?: string | boolean;
-          homeSections?: unknown;
-          homeChips?: unknown;
-          exploreSections?: unknown;
-          bottomTabs?: unknown;
-          homeButtons?: unknown;
-          playerButtons?: unknown;
-          showQueueButton?: boolean;
-          showDevicesButton?: boolean;
-          showSpeedButton?: boolean;
-          lyricsColorBackground?: boolean;
-          lyricsOnlineFallback?: boolean;
-          playerColorBackground?: boolean;
-          swipeToQueue?: boolean;
-          showExploreChips?: boolean;
-          exploreChips?: unknown;
-          exploreChipIcons?: boolean;
-          showHistoryButton?: boolean;
-        };
-        // Every on/off setting the same way: a saved boolean is taken as is.
-        // The few that also migrate an older value do that further down.
-        const flags: Record<string, boolean> = {};
-        for (const key of PERSISTED_KEYS) {
-          const value: unknown = parsed[key];
-          if (typeof DEFAULTS[key] === 'boolean' && typeof value === 'boolean') flags[key] = value;
-        }
-        set(flags as Partial<SettingsState>);
-        // One switch used to blur both bars.
-        if (typeof parsed.blurMiniPlayer !== 'boolean' && typeof parsed.blurBars === 'boolean') {
-          set({ blurMiniPlayer: parsed.blurBars });
-        }
-        if (typeof parsed.maxBitRate === 'number') {
-          set({ maxBitRate: parsed.maxBitRate });
-        }
-        if (typeof parsed.maxBitRateCellular === 'number') {
-          set({ maxBitRateCellular: parsed.maxBitRateCellular });
-        } else if (typeof parsed.maxBitRate === 'number') {
-          // Previously there was a single streaming quality: whoever had it set
-          // inherits the same value for cellular (identical behavior until they
-          // touch the new setting).
-          set({ maxBitRateCellular: parsed.maxBitRate });
-        }
-        if (typeof parsed.downloadBitRate === 'number') {
-          set({ downloadBitRate: parsed.downloadBitRate });
-        }
-        if (DOWNLOAD_CONCURRENCY_OPTIONS.includes(parsed.downloadConcurrency as number)) {
-          set({ downloadConcurrency: parsed.downloadConcurrency as number });
-        }
-        if (TRANSCODE_FORMATS.includes(parsed.streamFormat as TranscodeFormat)) {
-          set({ streamFormat: parsed.streamFormat as TranscodeFormat });
-        }
-        if (TRANSCODE_FORMATS.includes(parsed.streamFormatCellular as TranscodeFormat)) {
-          set({ streamFormatCellular: parsed.streamFormatCellular as TranscodeFormat });
-        } else if (TRANSCODE_FORMATS.includes(parsed.streamFormat as TranscodeFormat)) {
-          // Previously there was a single streaming codec: whoever had it set
-          // keeps it on both networks until they touch the new setting.
-          set({ streamFormatCellular: parsed.streamFormat as TranscodeFormat });
-        }
-        if (TRANSCODE_FORMATS.includes(parsed.downloadFormat as TranscodeFormat)) {
-          set({ downloadFormat: parsed.downloadFormat as TranscodeFormat });
-        }
-        if (SONG_CACHE_LIMITS_GB.includes(parsed.songCacheLimitGb as number)) {
-          set({ songCacheLimitGb: parsed.songCacheLimitGb as number });
-        }
-        // `language` is no longer applied here: it's global, loaded at the end.
-        // It used to be a mode ('off'/'player'/'everywhere'); now a simple
-        // on/off. Map old values: any mode that showed the label maps to on.
-        if (typeof parsed.showAudioQuality === 'boolean') {
-          set({ showAudioQuality: parsed.showAudioQuality });
-        } else if (parsed.showAudioQuality === 'player' || parsed.showAudioQuality === 'everywhere') {
-          set({ showAudioQuality: true });
-        } else if (parsed.showAudioQuality === 'off') {
-          set({ showAudioQuality: false });
-        }
-        if (typeof parsed.crossfadeSec === 'number' && parsed.crossfadeSec >= 0) {
-          set({ crossfadeSec: parsed.crossfadeSec });
-        }
-        // Clamped rather than only checked: these two decide whether a listen
-        // is reported at all, and a file with a percentage of 4000 in it would
-        // otherwise turn scrobbling off in a way nothing on screen explains.
-        if (typeof parsed.scrobblePercent === 'number' && parsed.scrobblePercent >= 0) {
-          set({ scrobblePercent: Math.min(100, Math.round(parsed.scrobblePercent)) });
-        }
-        if (typeof parsed.scrobbleSeconds === 'number' && parsed.scrobbleSeconds >= 0) {
-          set({
-            scrobbleSeconds: Math.min(SCROBBLE_SECONDS_MAX, Math.round(parsed.scrobbleSeconds)),
-          });
-        }
-        if (
-          parsed.replayGain === 'off' ||
-          parsed.replayGain === 'auto' ||
-          parsed.replayGain === 'track' ||
-          parsed.replayGain === 'album'
-        ) {
-          set({ replayGain: parsed.replayGain });
-        }
-        if (typeof parsed.replayGainPreampDb === 'number') {
-          set({ replayGainPreampDb: clampReplayGainPreamp(parsed.replayGainPreampDb) });
-        }
-        if (parsed.lyricsBackground === 'none' || parsed.lyricsBackground === 'color' || parsed.lyricsBackground === 'cover') {
-          set({ lyricsBackground: parsed.lyricsBackground });
-        } else if (typeof parsed.lyricsColorBackground === 'boolean') {
-          // Same migration as the player's: on → tinted, off → flat.
-          set({ lyricsBackground: parsed.lyricsColorBackground ? 'color' : 'none' });
-        }
-        // The card used to follow the lyrics screen's setting, so a profile
-        // without its own value inherits whatever the screen had.
-        if (parsed.lyricsCardBackground === 'none' || parsed.lyricsCardBackground === 'color') {
-          set({ lyricsCardBackground: parsed.lyricsCardBackground });
-        } else if (parsed.lyricsBackground === 'none') {
-          set({ lyricsCardBackground: 'none' });
-        } else if (typeof parsed.lyricsColorBackground === 'boolean') {
-          set({ lyricsCardBackground: parsed.lyricsColorBackground ? 'color' : 'none' });
-        }
-        if (
-          parsed.lyricsSource === 'local' ||
-          parsed.lyricsSource === 'online' ||
-          parsed.lyricsSource === 'off'
-        ) {
-          set({ lyricsSource: parsed.lyricsSource });
-        } else if (typeof parsed.lyricsOnlineFallback === 'boolean') {
-          // Migrate the old boolean: on = local first with online fallback, off = no online.
-          set({ lyricsSource: parsed.lyricsOnlineFallback ? 'local' : 'off' });
-        }
-        const oneOf = <T extends string>(v: unknown, all: readonly T[]): v is T =>
-          all.includes(v as T);
-        if (oneOf(parsed.lyricsSize, ['small', 'normal', 'large'] as const)) {
-          set({ lyricsSize: parsed.lyricsSize });
-        }
-        if (oneOf(parsed.lyricsAlign, ['left', 'center'] as const)) {
-          set({ lyricsAlign: parsed.lyricsAlign });
-        }
-        if (oneOf(parsed.miniPlayerButtons, ['favorite', 'next', 'previousNext', 'none'] as const)) {
-          set({ miniPlayerButtons: parsed.miniPlayerButtons });
-        }
-        if (oneOf(parsed.coverCorners, ['square', 'rounded', 'round'] as const)) {
-          set({ coverCorners: parsed.coverCorners });
-        }
-        if (
-          parsed.preferDownloads === 'always' ||
-          parsed.preferDownloads === 'cellular' ||
-          parsed.preferDownloads === 'original' ||
-          parsed.preferDownloads === 'never'
-        ) {
-          set({ preferDownloads: parsed.preferDownloads });
-        }
-        if (parsed.playerBackground === 'none' || parsed.playerBackground === 'color' || parsed.playerBackground === 'cover') {
-          set({ playerBackground: parsed.playerBackground });
-        } else if (typeof parsed.playerColorBackground === 'boolean') {
-          // Migration from the old boolean: on → the tinted background it
-          // already had, off → flat. Profiles saved before the blurred cover
-          // option existed keep looking exactly the same.
-          set({ playerBackground: parsed.playerColorBackground ? 'color' : 'none' });
-        }
-        if (isCoverTapAction(parsed.coverTapAction)) {
-          set({ coverTapAction: parsed.coverTapAction });
-        }
-        if (isCoverTapAction(parsed.coverDoubleTapAction)) {
-          set({ coverDoubleTapAction: parsed.coverDoubleTapAction });
-        }
-        if (parsed.seekButtonsSec === 0 || parsed.seekButtonsSec === 5 || parsed.seekButtonsSec === 10 || parsed.seekButtonsSec === 30) {
-          set({ seekButtonsSec: parsed.seekButtonsSec });
-        }
-        if (parsed.previousButtonMode === 'restart' || parsed.previousButtonMode === 'always') {
-          set({ previousButtonMode: parsed.previousButtonMode });
-        }
-        if (
-          parsed.swipeAction === 'off' ||
-          parsed.swipeAction === 'queue' ||
-          parsed.swipeAction === 'next' ||
-          parsed.swipeAction === 'favorite' ||
-          parsed.swipeAction === 'menu'
-        ) {
-          set({ swipeAction: parsed.swipeAction });
-        } else if (typeof parsed.swipeToQueue === 'boolean') {
-          // Migration from the old setting: on → queue, off → nothing.
-          set({ swipeAction: parsed.swipeToQueue ? 'queue' : 'off' });
-        }
-        if (
-          parsed.swipeLeftAction === 'off' ||
-          parsed.swipeLeftAction === 'queue' ||
-          parsed.swipeLeftAction === 'next' ||
-          parsed.swipeLeftAction === 'favorite' ||
-          parsed.swipeLeftAction === 'menu'
-        ) {
-          set({ swipeLeftAction: parsed.swipeLeftAction });
-        }
-        if (Array.isArray(parsed.homeSections)) {
-          set({ homeSections: normalizeHomeSections(parsed.homeSections) });
-        }
-        if (parsed.quickGridSize === 4 || parsed.quickGridSize === 6 || parsed.quickGridSize === 8) {
-          set({ quickGridSize: parsed.quickGridSize });
-        }
-        // Truncated on hydrate: a setting saved by a version with a different
-        // cap must not sneak in longer than what fits.
-        if (typeof parsed.customGreeting === 'string') {
-          set({ customGreeting: parsed.customGreeting.slice(0, GREETING_MAX) });
-        }
-        // Two older names are still read here, and this is the whole of the
-        // rename's cost. The row used to be called the Explore chips, one word
-        // away from the Explore tab and meaning something else entirely; a
-        // file written before the rename says `exploreChips`, and whoever had
-        // spent time putting those in order would have found them back at the
-        // defaults. Written under the new name from the first save on, so this
-        // only ever runs once per install.
-        const chipIcons = parsed.homeChipIcons ?? parsed.exploreChipIcons;
-        if (typeof chipIcons === 'boolean') {
-          set({ homeChipIcons: chipIcons });
-        }
-        const chips = parsed.homeChips ?? parsed.exploreChips;
-        if (Array.isArray(chips)) {
-          set({ homeChips: normalizeHomeChips(chips) });
-        } else if (parsed.showExploreChips === false) {
-          // Migration from the single toggle that came before either name:
-          // whoever had the row hidden should still not see it, not find the
-          // chips back. Turning them all off is exactly what hides it now.
-          set({ homeChips: DEFAULT_HOME_CHIPS.map((c) => ({ ...c, enabled: false })) });
-        }
-        if (Array.isArray(parsed.bottomTabs)) {
-          set({ bottomTabs: normalizeBottomTabs(parsed.bottomTabs) });
-        }
-        if (Array.isArray(parsed.exploreSections)) {
-          set({ exploreSections: normalizeExploreSections(parsed.exploreSections) });
-        }
-        if (Array.isArray(parsed.homeButtons)) {
-          set({ homeButtons: normalizeHomeButtons(parsed.homeButtons) });
-        } else if (parsed.showHistoryButton === false) {
-          // Migration from the previous single toggle: the clock was the only
-          // one of these with a switch, and whoever had it hidden should not
-          // find it back.
-          set({
-            homeButtons: DEFAULT_HOME_BUTTONS.map((b) =>
-              b.key === 'history' ? { ...b, enabled: false } : { ...b },
-            ),
-          });
-        }
-        if (parsed.playerButtonsLayout === 'centered' || parsed.playerButtonsLayout === 'spread') {
-          set({ playerButtonsLayout: parsed.playerButtonsLayout });
-        }
-        if (Array.isArray(parsed.playerButtons)) {
-          set({ playerButtons: normalizePlayerButtons(parsed.playerButtons) });
-        } else {
-          // From the three switches there were before: whoever had one of them
-          // off does not find it back. Speed was off unless turned on.
-          const off = new Set<PlayerButtonKey>();
-          if (parsed.showQueueButton === false) off.add('queue');
-          if (parsed.showDevicesButton === false) off.add('devices');
-          if (parsed.showSpeedButton !== true && 'showQueueButton' in parsed) off.add('speed');
-          set({
-            playerButtons: DEFAULT_PLAYER_BUTTONS.map((b) => ({ ...b, enabled: !off.has(b.key) })),
-          });
-        }
-        if (
-          parsed.defaultTab === 'index' ||
-          parsed.defaultTab === 'search' ||
-          parsed.defaultTab === 'library' ||
-          parsed.defaultTab === 'explore'
-        ) {
-          set({ defaultTab: parsed.defaultTab });
-        }
-        if (parsed.librarySort === 'recent' || parsed.librarySort === 'added' || parsed.librarySort === 'alpha') {
-          set({ librarySort: parsed.librarySort });
-        }
-        if (parsed.libraryLayout === 'list' || parsed.libraryLayout === 'grid') {
-          set({ libraryLayout: parsed.libraryLayout });
-        }
-        if (parsed.browseArtistsLayout === 'list' || parsed.browseArtistsLayout === 'grid') {
-          set({ browseArtistsLayout: parsed.browseArtistsLayout });
-        }
-        if (parsed.browseAlbumsLayout === 'list' || parsed.browseAlbumsLayout === 'grid') {
-          set({ browseAlbumsLayout: parsed.browseAlbumsLayout });
-        }
-        if (parsed.browsePlaylistsLayout === 'list' || parsed.browsePlaylistsLayout === 'grid') {
-          set({ browsePlaylistsLayout: parsed.browsePlaylistsLayout });
-        }
-        if (
-          parsed.browsePlaylistsSort === 'recent' ||
-          parsed.browsePlaylistsSort === 'added' ||
-          parsed.browsePlaylistsSort === 'alpha'
-        ) {
-          set({ browsePlaylistsSort: parsed.browsePlaylistsSort });
-        }
-        if (parsed.browseSongsLayout === 'list' || parsed.browseSongsLayout === 'grid') {
-          set({ browseSongsLayout: parsed.browseSongsLayout });
-        }
-        if (parsed.discographyLayout === 'list' || parsed.discographyLayout === 'grid') {
-          set({ discographyLayout: parsed.discographyLayout });
-        }
-        if (parsed.genreLayout === 'list' || parsed.genreLayout === 'grid') {
-          set({ genreLayout: parsed.genreLayout });
-        }
-        // Read key by key rather than taken whole: a number from a file is the
-        // one thing here that decides how a list is laid out, and a stray one
-        // would be a screen that renders with columns nobody can choose. Keys
-        // that are not grids any more simply do not survive the read.
-        if (parsed.gridColumns && typeof parsed.gridColumns === 'object') {
-          const cols: Partial<Record<GridSizeKey, number>> = {};
-          for (const [key, value] of Object.entries(parsed.gridColumns)) {
-            // A grid remembers a phone and a tablet apart, so the key can carry
-            // which one it is; the grid itself has to be one that still exists.
-            const wide = key.endsWith(':wide');
-            if (!(key.replace(/:wide$/, '') in GRID_DEFAULT_COLUMNS)) continue;
-            const choices = wide ? WIDE_COLUMN_CHOICES : GRID_COLUMN_CHOICES;
-            if (choices.includes(value as number)) cols[key as GridSizeKey] = value as number;
-          }
-          set({ gridColumns: cols });
-        }
-        if (SHARE_EXPIRIES.includes(parsed.shareExpiry as ShareExpiry)) {
-          set({ shareExpiry: parsed.shareExpiry as ShareExpiry });
-        }
-        // The light accent falls back to the dark one rather than to the
-        // default: every profile that picked a colour before there were two of
-        // them picked it for the app, not for one of its appearances.
-        if (isHexColor(parsed.accentColor) || isHexColor(parsed.accentColorLight)) {
-          const dark = isHexColor(parsed.accentColor) ? parsed.accentColor : DEFAULT_ACCENT;
-          const light = isHexColor(parsed.accentColorLight) ? parsed.accentColorLight : dark;
-          set({ accentColor: dark, accentColorLight: light });
-          applyAccents(dark, light);
-        }
-        if (isHexColor(parsed.customAccentColor)) {
-          set({ customAccentColor: parsed.customAccentColor });
-        }
-        {
-          const hour = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 23 ? (v as number) : null);
-          const light = hour(parsed.themeLightFrom) ?? DEFAULTS.themeLightFrom;
-          const dark = hour(parsed.themeDarkFrom) ?? DEFAULTS.themeDarkFrom;
-          set({ themeLightFrom: light, themeDarkFrom: dark });
-          applyThemeSchedule(light, dark);
-        }
-        if (isThemePreference(parsed.themeMode)) {
-          set({ themeMode: parsed.themeMode });
-          applyThemePreference(parsed.themeMode);
-        }
-        if (typeof parsed.pureBlack === 'boolean') {
-          set({ pureBlack: parsed.pureBlack });
-          applyPureBlack(parsed.pureBlack);
-        }
-        if (typeof parsed.backgroundTint === 'string' && parsed.backgroundTint in BACKGROUND_TINTS) {
-          set({ backgroundTint: parsed.backgroundTint });
-          applyBackgroundTint(parsed.backgroundTint);
-        }
-        if (parsed.appFont && (parsed.appFont in APP_FONT_FAMILY || parsed.appFont === 'custom')) {
-          set({ appFont: parsed.appFont });
-        }
-        if (parsed.customFontFamily) {
-          set({ customFontFamily: parsed.customFontFamily });
-        }
-        if (parsed.customFontUri) {
-          set({ customFontUri: parsed.customFontUri });
-        }
-      }
+      if (raw) applySaved(JSON.parse(raw), set);
       // Language: global (not per profile). If not yet saved separately, it is
       // migrated from the old blob (which included it) on first run.
       let lang = await getItem(LANG_KEY);
@@ -1933,11 +2056,13 @@ export const useSettings = create<SettingsState>((set, get) => ({
       // hydration has taken over.
       if (!applied && scope.accept(token, key)) {
         set({ ...DEFAULTS, language: get().language });
-        applyAccents(DEFAULT_ACCENT, DEFAULT_ACCENT);
-        applyThemeSchedule(DEFAULTS.themeLightFrom, DEFAULTS.themeDarkFrom);
-        applyThemePreference(DEFAULTS.themeMode);
+        applyFactoryLook();
       }
     } finally {
+      // A read overtaken by a newer one has nothing to hand over: saying
+      // hydrated here showed the factory values as the saved ones, and the
+      // battery warning asked again after «Don't remind me» (#238).
+      if (!scope.current(token)) return;
       // Read or failed, what's in memory is now what this profile gets.
       set({ hydrated: true });
       // Here rather than where the value is read, so it is also settled for a
@@ -1945,6 +2070,22 @@ export const useSettings = create<SettingsState>((set, get) => ({
       // the startup it would otherwise miss, and this is where it is told
       // whether anybody asked for it.
       setPerfEnabled(get().diagnostics);
+      // The encoder's rate is native state with no way to read it back, so it
+      // is pushed here for the same reason: every profile's saved value takes
+      // effect on the first clip it builds, not on the next launch.
+      pushArtworkEncodeFps(get().animatedArtworkFps);
     }
   },
 }));
+
+/**
+ * What an exported file carries (#243): every per-profile setting but where
+ * this phone keeps its custom font, which means nothing anywhere else. None of
+ * them is a credential; those live in the auth store.
+ */
+export function exportedSettings(): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...snapshot(useSettings.getState) };
+  delete out.customFontFamily;
+  delete out.customFontUri;
+  return out;
+}

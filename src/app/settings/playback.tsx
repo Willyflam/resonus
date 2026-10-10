@@ -13,7 +13,7 @@
  * Settings › Player.
  */
 import { useRouter } from 'expo-router';
-import { ScrollView, Text } from 'react-native';
+import { Platform, ScrollView, Text } from 'react-native';
 
 import {
   SelectList,
@@ -64,6 +64,8 @@ export default function PlaybackSettings() {
   const preferDownloads = useSettings((s) => s.preferDownloads);
   const setPreferDownloads = useSettings((s) => s.setPreferDownloads);
   const setPreloadUpcoming = useSettings((s) => s.setPreloadUpcoming);
+  const preferPreciseTiming = useSettings((s) => s.preferPreciseTiming);
+  const setPreferPreciseTiming = useSettings((s) => s.setPreferPreciseTiming);
   const replayGain = useSettings((s) => s.replayGain);
   const setReplayGain = useSettings((s) => s.setReplayGain);
   const replayGainPreampDb = useSettings((s) => s.replayGainPreampDb);
@@ -126,11 +128,24 @@ export default function PlaybackSettings() {
                 options={[
                   {
                     label: t('Preload upcoming tracks'),
-                    description: t('Fetch the next tracks ahead so they start instantly. Helps with slow servers and proxies.'),
                     value: preloadUpcoming,
                     onChange: setPreloadUpcoming,
                     disabled: offline,
                   },
+                  // AVFoundation's key: Android has no such switch to throw.
+                  ...(Platform.OS === 'ios'
+                    ? [
+                        {
+                          label: t('Precise timing'),
+                          description: t(
+                            'Asks the file for frame-exact seeks and durations before playing. On a stream with no index that means scanning it first, which is the wait before a track starts. Off, tracks start at once: the clock still follows the audio, seeks may land a fraction of a second off.',
+                          ),
+                          value: preferPreciseTiming,
+                          onChange: setPreferPreciseTiming,
+                          disabled: offline,
+                        },
+                      ]
+                    : []),
                   {
                     label: t('Transcode lossless files only'),
                     description: t(
@@ -298,7 +313,6 @@ export default function PlaybackSettings() {
             },
             {
               label: t('Warn about battery optimization'),
-              description: t('Check on startup whether Android is limiting the app in the background.'),
               value: batteryWarning,
               onChange: setBatteryWarning,
             },

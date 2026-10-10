@@ -118,6 +118,7 @@
     "Custom greeting": "A greeting of your own, replacing Home's \"Good morning\" line",
     "Quick grid": "The grid of shortcut tiles on Home",
     "Home chips": "The row of tappable category chips",
+    "Show chips": "A switch over the Home chips list: turns every chip on or off at once",
     "Song lists": "The setting for how song lists look",
     "Show explicit tag": "A switch: whether to draw the E on anything carrying a parental advisory. \"Explicit\" here is the music-industry label for strong language, not \"clear\" or \"stated outright\"",
     "Home sections": "Reorder which sections appear on Home",
@@ -254,6 +255,7 @@
     "Settings restored": "Toast after putting the settings back to their defaults",
     "Your preferences will go back to their defaults. Your language stays.": "The line under that dialog",
     "Report a bug": "Opens a new issue on GitHub",
+    "Share diagnostic report": "Settings › About, under “Report a bug”: hands over a plain-text report (setup and recent playback errors) through the share sheet",
     "FAQ": "Opens the page of frequently asked questions on GitHub. Spell it out if that reads better in your language than the initials",
     "Cache cleared": "Toast: what was remembered from the server was thrown away. Downloads are untouched",
     "Couldn't rescan": "Toast: going through the phone's own files failed",
@@ -549,8 +551,6 @@
     "Haptic feedback": "The small vibration when something is tapped",
     "Open the app on": "Which tab the app opens on, and comes back to after a while away",
     "Start on your playlists": "A switch: with it on, Your library with no chip pressed shows the Favorites entry and the playlists, the way it used to, instead of albums, artists and playlists mixed together",
-    "Keep where you were": "A switch in Settings \u203a Appearance, right under \u201cOpen the app on\u201d: with it on, reopening the app after a while leaves it where it was instead of going back to that tab",
-    "Coming back after a few minutes leaves the app on the screen you left, instead of on the tab above.": "The line under that switch. \u201cThe tab above\u201d is the \u201cOpen the app on\u201d setting sitting right above it",
     "Home buttons": "The icons at the top right of Home (search, history, settings), which of them show and in what order",
 
     // ── Settings › Network ───────────────────────────────────────────────────
@@ -562,6 +562,10 @@
     // ── Settings › About ─────────────────────────────────────────────────────
     "Version": "Which version of Resonus this is. Tapping it five times opens Diagnostics",
     "What's new": "Opens what changed in this version",
+    "New features": "Heading in the update prompt over the new things a release brings. The lines under it stay in English",
+    "Changes": "Heading in the update prompt over what a release changes",
+    "Fixes": "Heading in the update prompt over the bugs a release fixes",
+    "{n} more": "Under a heading of the update prompt: how many more lines of that kind the release notes have",
     "Support Resonus": "The row for whoever wants to give something. The app needs nothing to work",
 
     // ── Radio ────────────────────────────────────────────────────────────────
@@ -579,6 +583,8 @@
     "Lyrics background": "What is drawn behind the lyrics screen, the full screen one",
     "Lyrics card background": "What is drawn behind the small lyrics card that peeks under the player. Not the same thing as `Lyrics background`",
     "Lyrics source": "Where lyrics are looked for. Its values are the three `Prefer…`/`Disable…` lines",
+    "Blur inactive lyrics": "A switch in the Lyrics section: progressively softens synchronized lyric rows away from the current line",
+    "Slightly blur synchronized lyrics other than the current line to emphasize what is playing.": "Help text under that switch. Only the current synchronized lyric line stays sharp",
     "Prefer local lyrics": "A value of `Lyrics source`: use the ones that came with the file first",
     "Prefer online search": "A value of `Lyrics source`: look them up on the internet first",
     "Disable online search": "A value of `Lyrics source`: only ever use the ones that came with the file",
@@ -744,6 +750,13 @@
   "Small": "A lyrics size",
   "Normal": "A lyrics size, the default one",
   "Large": "A lyrics size",
+  "Lyrics size": "Text size on every lyrics surface: small, normal or large",
+  "Lyrics weight": "Thickness of text on every lyrics surface",
+  "Light font weight": "A lyrics font weight: thin strokes (300)",
+  "Regular font weight": "A lyrics font weight: regular strokes (400)",
+  "Medium font weight": "A lyrics font weight: medium strokes and the default (500)",
+  "Semi-bold font weight": "A lyrics font weight: semi-bold strokes (600)",
+  "Bold font weight": "A lyrics font weight: bold strokes (700)",
   "Left": "Lyrics alignment: lines start at the left edge",
   "Centered": "Lyrics alignment: each line centred",
   "Scheduled": "A theme mode: light from one hour of the day, dark from another",
